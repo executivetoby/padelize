@@ -1,5 +1,5 @@
 import { model, Schema } from 'mongoose';
-import { freePlan, maxPlan, proPlan } from './Subscription.js';
+import { freePlan, proPlan } from './Subscription.js';
 
 const packageSchema = new Schema(
   {
@@ -45,8 +45,8 @@ packageSchema.virtual('planFeatures').get(function () {
       return freePlan;
     case this.slug.startsWith('pro'):
       return proPlan;
-    case this.slug.startsWith('max'):
-      return maxPlan;
+    // case this.slug.startsWith('max'):
+    //   return maxPlan;
     default:
       return freePlan;
   }

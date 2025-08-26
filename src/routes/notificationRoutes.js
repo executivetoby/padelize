@@ -6,10 +6,10 @@ import {
   markAsRead,
   markAllAsRead,
   deleteNotification,
-  deleteAllNotifications,
-  getNotificationStats,
-  getRecentNotifications,
-  updateNotificationPreferences,
+  // deleteAllNotifications,
+  // getNotificationStats,
+  // getRecentNotifications,
+  // updateNotificationPreferences,
 } from '../controllers/notificationController.js';
 import { protect } from '../controllers/authController.js';
 
@@ -25,22 +25,22 @@ router.get('/', getNotifications);
 router.get('/unread-count', getUnreadCount);
 
 // Get recent notifications (last 24 hours)
-router.get('/recent', getRecentNotifications);
+// router.get('/recent', getRecentNotifications);
 
 // Get notification statistics
-router.get('/stats', getNotificationStats);
+// router.get('/stats', getNotificationStats);
 
 // Mark all notifications as read
 router.patch('/mark-all-read', markAllAsRead);
 
 // Delete all notifications
-router.delete('/delete-all', deleteAllNotifications);
+// router.delete('/delete-all', deleteAllNotifications);
 
-// Update notification preferences
-router.patch('/preferences', updateNotificationPreferences);
+// // Update notification preferences
+// router.patch('/preferences', updateNotificationPreferences);
 
 // Mark specific notification as read
-router.patch('/:notificationId/read', markAsRead);
+router.patch('/:id/read', markAsRead);
 
 // Delete specific notification
 router.delete('/:notificationId', deleteNotification);

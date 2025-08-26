@@ -9,7 +9,12 @@ const subscriptionSchema = new Schema(
     },
     plan: {
       type: String,
-      enum: ['free', 'pro_monthly', 'pro_yearly', 'max_monthly', 'max_yearly'],
+      enum: [
+        'free',
+        'pro_monthly',
+        'pro_yearly',
+        // 'max_monthly', 'max_yearly'
+      ],
       default: 'free',
       required: true,
     },
@@ -57,37 +62,51 @@ const subscriptionSchema = new Schema(
 );
 
 export const freePlan = {
-  recordingHours: 2,
-  cloudStorage: '4GB',
-  lineCallbacks: false,
-  advancedShotAnalysis: false,
-  aiScoreboards: false,
-  aiCoaching: false,
-  videoQuality4k: false,
-  liveLineCalls: false,
+  matchAnalysesPerWeek: 1,
+  shotSuccessPercentage: true,
+  basicShotClassification: true, // forehand/backhand only
+  fullShotBreakdown: false, // no smash & volley
+  movementHeatmaps: false,
+  averageSpeed: false,
+  distanceCovered: true,
+  caloriesBurned: true,
+  communityFeedAccess: true,
+  leaderboardAccess: true,
+  processingSpeed: 'standard', // slower processing
+  earlyFeatureAccess: false,
 };
 
 export const proPlan = {
-  recordingHours: 30,
-  cloudStorage: true,
-  lineCallbacks: true,
-  advancedShotAnalysis: true,
-  aiScoreboards: false,
-  aiCoaching: false,
-  videoQuality4k: false,
-  liveLineCalls: false,
+  matchAnalysesPerWeek: 3,
+  shotSuccessPercentage: true,
+  basicShotClassification: true,
+  fullShotBreakdown: true, // includes smash & volley
+  movementHeatmaps: true,
+  averageSpeed: true,
+  distanceCovered: true,
+  caloriesBurned: true,
+  communityFeedAccess: true,
+  leaderboardAccess: true,
+  processingSpeed: 'fast', // within 1 hour
+  earlyFeatureAccess: true,
 };
 
-export const maxPlan = {
-  recordingHours: 60,
-  cloudStorage: true,
-  lineCallbacks: true,
-  advancedShotAnalysis: true,
-  aiScoreboards: true,
-  aiCoaching: true,
-  videoQuality4k: true,
-  liveLineCalls: true,
-};
+// export const maxPlan = {
+//   matchAnalysesPerWeek: -1, // unlimited
+//   shotSuccessPercentage: true,
+//   basicShotClassification: true,
+//   fullShotBreakdown: true,
+//   movementHeatmaps: true,
+//   averageSpeed: true,
+//   distanceCovered: true,
+//   caloriesBurned: true,
+//   communityFeedAccess: true,
+//   leaderboardAccess: true,
+//   processingSpeed: 'fastest', // priority processing
+//   earlyFeatureAccess: true,
+//   advancedAnalytics: true,
+//   customReports: true,
+// };
 
 subscriptionSchema.virtual('planFeatures').get(function () {
   switch (true) {
@@ -95,10 +114,10 @@ subscriptionSchema.virtual('planFeatures').get(function () {
       return freePlan;
     case this.plan.startsWith('pro'):
       return proPlan;
-    case this.plan.startsWith('max'):
-      return maxPlan;
-    // default:
-    //   return freePlan;
+    // case this.plan.startsWith('max'):
+    //   return maxPlan;
+    default:
+      return freePlan;
   }
 });
 

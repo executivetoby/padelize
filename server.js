@@ -19,6 +19,7 @@ import app from './app.js';
 import connectDB from './connectDB.js';
 import webSocketService from './src/services/webSocketService.js';
 import analysisStatusCron from './src/services/cronService.js';
+import { initializeSubscriptionCronJobs } from './src/services/subscriptionCronService.js';
 
 connectDB();
 
@@ -33,6 +34,9 @@ global.websocketService = webSocketService;
 const startServer = async () => {
   try {
     analysisStatusCron.start();
+    
+    // Initialize subscription management cron jobs
+    initializeSubscriptionCronJobs();
 
     const port = process.env.PORT || 9000;
     server.listen(port, () => {
@@ -41,6 +45,7 @@ const startServer = async () => {
           .bold.cyan
       );
       createLogger.info('Analysis status cron job is active'.bold.blue);
+      createLogger.info('Subscription management cron jobs are active'.bold.green);
     });
   } catch (error) {
     createLogger.error(`Error starting server: ${error.message}`.bold.red);

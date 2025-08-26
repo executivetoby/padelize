@@ -48,6 +48,7 @@ import replyRouter from './src/routes/replyRoutes.js';
 import analysisRouter from './src/routes/analysisRoutes.js';
 import firebaseRouter from './src/routes/firebaseRoutes.js';
 import notificationRouter from './src/routes/notificationRoutes.js';
+import leaderboardRouter from './src/routes/leaderboardRoutes.js';
 
 app.use(
   session({
@@ -76,6 +77,7 @@ app.use('/api/v1/replies', replyRouter);
 app.use('/api/v1/analysis', analysisRouter);
 app.use('/api/v1/token', firebaseRouter);
 app.use('/api/v1/notifications', notificationRouter);
+app.use('/api/v1/leaderboard', leaderboardRouter);
 
 app.get('/', (req, res, next) => {
   res.status(200).json({

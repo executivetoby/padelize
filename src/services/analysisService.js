@@ -9,10 +9,12 @@ import { findOne } from '../factory/repo.js';
 import FirebaseService from './firebaseService.js';
 import { processAnalysisResponse } from '../utils/analysisFormatter.js';
 import AnalysisStatus from '../models/AnalysisStatus.js';
+import mongoose from 'mongoose';
+import Analysis from '../models/Analysis.js';
 
 // Configuration - update with your Python API URL
 // const PYTHON_API_BASE_URL = 'http://127.0.0.1:8000';
-const PYTHON_API_BASE_URL = 'http://server.padelize.ai';
+const PYTHON_API_BASE_URL = 'https://server.padelize.ai';
 
 class VideoAnalysisService {
   static createMultipartFormData(videoPath, options = {}, userId, matchId) {
@@ -80,7 +82,7 @@ class VideoAnalysisService {
       }
 
       const response = await fetch(
-        `${PYTHON_API_BASE_URL}/api/analyze/v2/shirtcolor_link`,
+        `${PYTHON_API_BASE_URL}/api/analyze/v3/shirtcolor_link`,
         {
           method: 'POST',
           body: formData,
@@ -762,7 +764,6 @@ class PlayerAnalyticsAggregator {
    * @param {Object} options - Query options
    * @param {Date} options.startDate - Start date for the duration
    * @param {Date} options.endDate - End date for the duration
-   * @param {String} options.createdBy - User ID to filter analyses (optional)
    * @param {Array} options.matchIds - Specific match IDs to include (optional)
    * @param {String} options.status - Analysis status filter (optional, default: 'completed')
    */
@@ -964,7 +965,7 @@ class PlayerAnalyticsAggregator {
 
       return {
         summary,
-        first_player_averages: results[0] || null,
+        player_averages: results[0] || null,
       };
     } catch (error) {
       throw new Error(`Error calculating player averages: ${error.message}`);
@@ -1067,7 +1068,220 @@ class PlayerAnalyticsAggregator {
     if (oldValue === 0) return newValue > 0 ? 100 : 0;
     return Math.round(((newValue - oldValue) / oldValue) * 100 * 100) / 100;
   }
+
+  /**
+   * Get percentage change between the last two matches/analyses
+   * @param {Object} options - Query options
+   * @param {String} options.createdBy - User ID to filter analyses
+   * @param {String} options.status - Analysis status filter (optional, default: 'completed')
+   */
+  static async getLastTwoMatchesComparison(options = {}) {
+    const { createdBy, status = 'completed' } = options;
+
+    // Build match criteria
+    const matchCriteria = {
+      status: status,
+    };
+
+    // Add user filter
+    if (createdBy) {
+      matchCriteria.created_by = new mongoose.Types.ObjectId(createdBy);
+    }
+
+    try {
+      // Get the last two analyses
+      const lastTwoAnalyses = await Analysis.find(matchCriteria)
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .select('player_analytics createdAt match_id');
+
+      if (lastTwoAnalyses.length < 2) {
+        throw new Error(
+          'Not enough analyses found. Need at least 2 matches for comparison.'
+        );
+      }
+
+      const [latest, previous] = lastTwoAnalyses;
+
+      // Extract first player data from each analysis
+      const latestPlayer = latest.player_analytics.players[0];
+      const previousPlayer = previous.player_analytics.players[0];
+
+      if (!latestPlayer || !previousPlayer) {
+        throw new Error('Player data not found in one or both analyses');
+      }
+
+      // Calculate percentage changes
+      const comparison = {
+        latest_match: {
+          match_id: latest.match_id,
+          date: latest.createdAt,
+          data: {
+            speed_kmh: latestPlayer.average_speed_kmh,
+            total_distance_km: latestPlayer.total_distance_km,
+            distance_from_center_km:
+              latestPlayer.average_distance_from_center_km,
+            calories_burned: latestPlayer.calories_burned,
+            total_shots: latestPlayer.shots.total_shots,
+            successful_shots: latestPlayer.shots.success,
+            success_rate: latestPlayer.shots.success_rate,
+            forehand: latestPlayer.shots.forehand,
+            backhand: latestPlayer.shots.backhand,
+            volley: latestPlayer.shots.volley,
+            smash: latestPlayer.shots.smash,
+          },
+        },
+        previous_match: {
+          match_id: previous.match_id,
+          date: previous.createdAt,
+          data: {
+            speed_kmh: previousPlayer.average_speed_kmh,
+            total_distance_km: previousPlayer.total_distance_km,
+            distance_from_center_km:
+              previousPlayer.average_distance_from_center_km,
+            calories_burned: previousPlayer.calories_burned,
+            total_shots: previousPlayer.shots.total_shots,
+            successful_shots: previousPlayer.shots.success,
+            success_rate: previousPlayer.shots.success_rate,
+            forehand: previousPlayer.shots.forehand,
+            backhand: previousPlayer.shots.backhand,
+            volley: previousPlayer.shots.volley,
+            smash: previousPlayer.shots.smash,
+          },
+        },
+        percentage_changes: {
+          speed_change: this.calculatePercentageChange(
+            previousPlayer.average_speed_kmh,
+            latestPlayer.average_speed_kmh
+          ),
+          distance_change: this.calculatePercentageChange(
+            previousPlayer.total_distance_km,
+            latestPlayer.total_distance_km
+          ),
+          center_distance_change: this.calculatePercentageChange(
+            previousPlayer.average_distance_from_center_km,
+            latestPlayer.average_distance_from_center_km
+          ),
+          calories_change: this.calculatePercentageChange(
+            previousPlayer.calories_burned,
+            latestPlayer.calories_burned
+          ),
+          shots_change: this.calculatePercentageChange(
+            previousPlayer.shots.total_shots,
+            latestPlayer.shots.total_shots
+          ),
+          successful_shots_change: this.calculatePercentageChange(
+            previousPlayer.shots.success,
+            latestPlayer.shots.success
+          ),
+          success_rate_change: this.calculatePercentageChange(
+            previousPlayer.shots.success_rate,
+            latestPlayer.shots.success_rate
+          ),
+          forehand_change: this.calculatePercentageChange(
+            previousPlayer.shots.forehand,
+            latestPlayer.shots.forehand
+          ),
+          backhand_change: this.calculatePercentageChange(
+            previousPlayer.shots.backhand,
+            latestPlayer.shots.backhand
+          ),
+          volley_change: this.calculatePercentageChange(
+            previousPlayer.shots.volley,
+            latestPlayer.shots.volley
+          ),
+          smash_change: this.calculatePercentageChange(
+            previousPlayer.shots.smash,
+            latestPlayer.shots.smash
+          ),
+        },
+        summary: {
+          improved_metrics: [],
+          declined_metrics: [],
+          unchanged_metrics: [],
+        },
+      };
+
+      // Categorize improvements/declines
+      Object.entries(comparison.percentage_changes).forEach(
+        ([metric, change]) => {
+          if (change > 0) {
+            comparison.summary.improved_metrics.push({
+              metric: metric.replace('_change', ''),
+              change: `+${change}%`,
+            });
+          } else if (change < 0) {
+            comparison.summary.declined_metrics.push({
+              metric: metric.replace('_change', ''),
+              change: `${change}%`,
+            });
+          } else {
+            comparison.summary.unchanged_metrics.push({
+              metric: metric.replace('_change', ''),
+              change: '0%',
+            });
+          }
+        }
+      );
+
+      return comparison;
+    } catch (error) {
+      throw new Error(`Error comparing last two matches: ${error.message}`);
+    }
+  }
 }
+
+export const playerAverageService = catchAsync(async (req, res, next) => {
+  const { startDate, endDate, matchIds } = req.query;
+  const { _id: userId } = req.user;
+
+  try {
+    const options = {
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      createdBy: userId,
+      matchIds: matchIds ? matchIds.split(',') : undefined,
+    };
+
+    const averages = await PlayerAnalyticsAggregator.getPlayerAverages(options);
+
+    res.status(200).json({
+      status: 'success',
+      data: averages,
+    });
+  } catch (error) {
+    return next(
+      new AppError(`Failed to get player averages: ${error.message}`, 500)
+    );
+  }
+});
+
+export const lastTwoMatchesComparisonService = catchAsync(
+  async (req, res, next) => {
+    const { _id: userId } = req.user;
+
+    try {
+      const options = {
+        createdBy: userId,
+      };
+
+      const comparison =
+        await PlayerAnalyticsAggregator.getLastTwoMatchesComparison(options);
+
+      res.status(200).json({
+        status: 'success',
+        data: comparison,
+      });
+    } catch (error) {
+      return next(
+        new AppError(
+          `Failed to get last two matches comparison: ${error.message}`,
+          500
+        )
+      );
+    }
+  }
+);
 
 // Usage examples:
 

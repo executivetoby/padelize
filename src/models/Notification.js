@@ -28,6 +28,10 @@ const notificationSchema = new mongoose.Schema(
         'follow', // Someone followed you
         'mention', // Someone mentioned you (future feature)
         'comment', // Someone commented on your post (if different from reply)
+        'matchCreated', // Match created notification
+        'matchUpdated', // Match updated notification
+        'postCreated', // Post created notification
+        'postUpdated', // Post updated notification
       ],
       required: true,
       index: true,
@@ -110,11 +114,11 @@ notificationSchema.index({ recipient: 1, type: 1, createdAt: -1 });
 notificationSchema.index({ groupKey: 1, createdAt: -1 });
 notificationSchema.index({ recipient: 1, deleted: 1, createdAt: -1 });
 
-// Virtual for checking if notification is recent (within 24 hours)
-notificationSchema.virtual('isRecent').get(function () {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  return this.createdAt > oneDayAgo;
-});
+// // Virtual for checking if notification is recent (within 24 hours)
+// notificationSchema.virtual('isRecent').get(function () {
+//   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+//   return this.createdAt > oneDayAgo;
+// });
 
 // Method to mark as read
 notificationSchema.methods.markAsRead = function () {

@@ -3,9 +3,11 @@ import {
   deleteMatchService,
   getAllMatchesService,
   getMatchService,
+  getUserMatchesService,
   getUserProfileService,
   updateMatchService,
   uploadVideoService,
+  checkAnalysisQuotaService,
 } from '../services/matchService.js';
 import catchAsync from '../utils/catchAsync.js';
 
@@ -19,6 +21,10 @@ export const getMatch = catchAsync(async (req, res, next) => {
 
 export const getAllMatches = catchAsync(async (req, res, next) => {
   getAllMatchesService(req, res, next);
+});
+
+export const getUserMatches = catchAsync(async (req, res, next) => {
+  getUserMatchesService(req, res, next);
 });
 
 export const updateMatch = catchAsync(async (req, res, next) => {
@@ -35,4 +41,8 @@ export const uploadVideo = catchAsync(async (req, res, next) => {
 
 export const getUserProfile = catchAsync(async (req, res, next) => {
   getUserProfileService(req, res, next);
+});
+
+export const checkAnalysisQuota = catchAsync(async (req, res, next) => {
+  checkAnalysisQuotaService(req, res, next);
 });

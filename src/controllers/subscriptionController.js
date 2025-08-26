@@ -1,6 +1,7 @@
 import { get } from 'mongoose';
 import {
   cancelSubscriptionService,
+  cancelSubscriptionImmediatelyService,
   changePlanService,
   createCheckoutSessionService,
   createFreeSubscriptionService,
@@ -21,6 +22,10 @@ export const handleSubscriptionSuccess = catchAsync(async (req, res, next) => {
 
 export const cancelSubscription = catchAsync(async (req, res, next) => {
   cancelSubscriptionService(req, res, next);
+});
+
+export const cancelSubscriptionImmediately = catchAsync(async (req, res, next) => {
+  cancelSubscriptionImmediatelyService(req, res, next);
 });
 
 export const getCurrentSubscription = catchAsync(async (req, res, next) => {

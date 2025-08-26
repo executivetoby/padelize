@@ -105,7 +105,7 @@ export const getAll = async (
   // Handle search configuration
   const { searchFields = [], searchTerm = '' } = searchOptions;
 
-  console.log({ searchFields, searchTerm });
+  console.log({ searchFields, searchTerm, populateOptions });
 
   // If search term and fields are provided, add search conditions to filter
   if (searchTerm && searchFields.length > 0) {

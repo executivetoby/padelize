@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { protect } from '../controllers/authController.js';
 import {
   cancelSubscription,
+  cancelSubscriptionImmediately,
   changePlan,
   createCheckoutSession,
   createFreeSubscription,
@@ -30,6 +31,7 @@ router.use(protect);
 router.post('/create_free_subscription', createFreeSubscription);
 router.post('/create_checkout_session', createCheckoutSession);
 router.post('/cancel', cancelSubscription);
+router.post('/cancel_immediately', cancelSubscriptionImmediately);
 router.post('/change_plan', changePlan);
 router.get('/current_subscription', getCurrentSubscription);
 router.get('/payment_history', getPaymentHistory);

@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
-import Follow from './Follow.js'; // Your Follow model
-import { Analysis } from './Analysis.js'; // Your Analysis model
+
 import { PlayerAnalyticsAggregator } from './analysisService.js';
+import Follow from '../models/Follow.js';
+import Analysis from '../models/Analysis.js';
+import catchAsync from '../utils/catchAsync.js';
 
 class TennisLeaderboard extends PlayerAnalyticsAggregator {
   /**
@@ -113,6 +115,7 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
       {
         $project: {
           user_id: '$_id',
+          name: '$user.fullName',
           username: '$user.username',
           email: '$user.email',
           profile_image: '$user.profile_image',
@@ -211,13 +214,23 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
    * Get leaderboard for specific set of users
    */
   static async getLeaderboardForUsers(options = {}) {
-    const { userIds, ...baseOptions } = options;
+    const {
+      userIds,
+      metric = 'distance',
+      limit = 50,
+      minMatches = 1,
+      ...baseOptions
+    } = options;
 
     if (!userIds || userIds.length === 0) {
-      return { leaderboard: [] };
+      return {
+        metric,
+        total_users: 0,
+        leaderboard: [],
+      };
     }
 
-    // Use the same pipeline as platform leaderboard but filter by userIds
+    // Build match criteria with user filter
     const matchCriteria = {
       status: 'completed',
       created_by: { $in: userIds.map((id) => new mongoose.Types.ObjectId(id)) },
@@ -231,15 +244,159 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
         matchCriteria.createdAt.$lte = new Date(baseOptions.endDate);
     }
 
-    // Use similar pipeline as getPlatformLeaderboard but with user filter
+    // Use the same pipeline structure as getPlatformLeaderboard
     const pipeline = [
       { $match: matchCriteria },
-      // ... rest of the pipeline from getPlatformLeaderboard
+
+      // Get first player from each analysis
+      {
+        $addFields: {
+          first_player: { $arrayElemAt: ['$player_analytics.players', 0] },
+        },
+      },
+
+      // Group by user (created_by)
+      {
+        $group: {
+          _id: '$created_by',
+          total_matches: { $sum: 1 },
+
+          // Distance metrics
+          total_distance_km: { $sum: '$first_player.total_distance_km' },
+          avg_distance_per_match: { $avg: '$first_player.total_distance_km' },
+
+          // Speed metrics
+          avg_speed_kmh: { $avg: '$first_player.average_speed_kmh' },
+          max_speed_kmh: { $max: '$first_player.average_speed_kmh' },
+
+          // Shot success metrics
+          total_shots: { $sum: '$first_player.shots.total_shots' },
+          total_successful_shots: { $sum: '$first_player.shots.success' },
+          avg_success_rate: { $avg: '$first_player.shots.success_rate' },
+
+          // Calories metrics
+          total_calories: { $sum: '$first_player.calories_burned' },
+          avg_calories_per_match: { $avg: '$first_player.calories_burned' },
+
+          // Additional stats
+          total_forehand: { $sum: '$first_player.shots.forehand' },
+          total_backhand: { $sum: '$first_player.shots.backhand' },
+          total_volleys: { $sum: '$first_player.shots.volley' },
+          total_smashes: { $sum: '$first_player.shots.smash' },
+
+          // Time range
+          first_match: { $min: '$createdAt' },
+          last_match: { $max: '$createdAt' },
+        },
+      },
+
+      // Filter by minimum matches
+      { $match: { total_matches: { $gte: minMatches } } },
+
+      // Calculate overall success rate
+      {
+        $addFields: {
+          overall_success_rate: {
+            $cond: {
+              if: { $gt: ['$total_shots', 0] },
+              then: {
+                $multiply: [
+                  { $divide: ['$total_successful_shots', '$total_shots'] },
+                  100,
+                ],
+              },
+              else: 0,
+            },
+          },
+        },
+      },
+
+      // Populate user details
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+
+      { $unwind: '$user' },
+
+      // Project final structure
+      {
+        $project: {
+          user_id: '$_id',
+          name: '$user.fullName',
+          username: '$user.username',
+          email: '$user.email',
+          profile_image: '$user.profile_image',
+          total_matches: 1,
+
+          // Main metrics for ranking
+          total_distance_km: { $round: ['$total_distance_km', 4] },
+          avg_distance_per_match: { $round: ['$avg_distance_per_match', 4] },
+          avg_speed_kmh: { $round: ['$avg_speed_kmh', 2] },
+          max_speed_kmh: { $round: ['$max_speed_kmh', 2] },
+          overall_success_rate: { $round: ['$overall_success_rate', 2] },
+          avg_success_rate: { $round: ['$avg_success_rate', 2] },
+          total_calories: { $round: ['$total_calories', 2] },
+          avg_calories_per_match: { $round: ['$avg_calories_per_match', 2] },
+
+          // Additional stats
+          total_shots: 1,
+          total_successful_shots: 1,
+          shot_breakdown: {
+            forehand: '$total_forehand',
+            backhand: '$total_backhand',
+            volley: '$total_volleys',
+            smash: '$total_smashes',
+          },
+
+          period: {
+            from: '$first_match',
+            to: '$last_match',
+          },
+        },
+      },
     ];
 
-    // Reuse the platform leaderboard logic
-    const platformOptions = { ...baseOptions, matchCriteria };
-    return await this.executeLeaderboardPipeline(platformOptions);
+    // Add sorting based on metric
+    const sortField = this.getSortField(metric);
+    pipeline.push({ $sort: { [sortField]: -1 } });
+    pipeline.push({ $limit: limit });
+
+    // Add ranking
+    pipeline.push({
+      $group: {
+        _id: null,
+        leaderboard: { $push: '$$ROOT' },
+      },
+    });
+
+    pipeline.push({
+      $unwind: { path: '$leaderboard', includeArrayIndex: 'rank' },
+    });
+
+    pipeline.push({
+      $replaceRoot: {
+        newRoot: {
+          $mergeObjects: ['$leaderboard', { rank: { $add: ['$rank', 1] } }],
+        },
+      },
+    });
+
+    const results = await Analysis.aggregate(pipeline);
+
+    return {
+      metric,
+      period: {
+        startDate: baseOptions.startDate,
+        endDate: baseOptions.endDate,
+      },
+      total_users: results.length,
+      leaderboard: results,
+    };
   }
 
   /**
@@ -270,16 +427,25 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
       'avg_speed_kmh',
       'overall_success_rate',
       'total_calories',
+      'total_shots', // Added total shots metric
     ];
     const positions = {};
 
     for (const metric of metrics) {
+      // Convert metric name to the format expected by getPlatformLeaderboard
+      let metricParam = metric
+        .replace('total_', '')
+        .replace('overall_', '')
+        .replace('avg_', '');
+
+      // Handle special case for shots
+      if (metric === 'total_shots') {
+        metricParam = 'shots';
+      }
+
       const leaderboard = await this.getPlatformLeaderboard({
         ...options,
-        metric: metric
-          .replace('total_', '')
-          .replace('overall_', '')
-          .replace('avg_', ''),
+        metric: metricParam,
         limit: 1000, // Get enough to find user position
       });
 
@@ -302,6 +468,20 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
     }
 
     return positions;
+  }
+
+  static async getUserNetworkPosition(userId, options = {}) {
+    const network = await this.getUserNetwork(userId);
+
+    const leaderboard = await this.getNetworkLeaderboard(userId, {
+      ...options,
+      userIds: network,
+      limit: 1000,
+    });
+
+    const userPosition = leaderboard.leaderboard.findIndex(
+      (entry) => entry.user_id.toString() === userId
+    );
   }
 
   /**
@@ -363,9 +543,57 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
       speed: 'avg_speed_kmh',
       success_rate: 'overall_success_rate',
       calories: 'total_calories',
+      shots: 'total_shots', // Added total shots metric
+      total_shots: 'total_shots', // Alternative naming
     };
 
     return sortFields[metric] || 'total_distance_km';
+  }
+
+  /**
+   * Get all available metrics for leaderboards
+   */
+  static getAvailableMetrics() {
+    return {
+      distance: {
+        field: 'total_distance_km',
+        name: 'Total Distance',
+        unit: 'km',
+        description: 'Total distance covered across all matches',
+      },
+      speed: {
+        field: 'avg_speed_kmh',
+        name: 'Average Speed',
+        unit: 'km/h',
+        description: 'Average speed across all matches',
+      },
+      success_rate: {
+        field: 'overall_success_rate',
+        name: 'Success Rate',
+        unit: '%',
+        description: 'Overall shot success rate',
+      },
+      calories: {
+        field: 'total_calories',
+        name: 'Total Calories',
+        unit: 'cal',
+        description: 'Total calories burned across all matches',
+      },
+      shots: {
+        field: 'total_shots',
+        name: 'Total Shots',
+        unit: 'shots',
+        description: 'Total number of shots played across all matches',
+      },
+    };
+  }
+
+  /**
+   * Validate if a metric is supported
+   */
+  static isValidMetric(metric) {
+    const availableMetrics = this.getAvailableMetrics();
+    return metric in availableMetrics;
   }
 
   /**
@@ -396,6 +624,13 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
       }),
     ]);
 
+    console.log(
+      'First Half Leaderboard:',
+      firstHalf,
+      'Second Half Leaderboard:',
+      secondHalf
+    );
+
     // Calculate improvements
     const improvements = [];
     const sortField = this.getSortField(metric);
@@ -416,6 +651,7 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
           current_value: current[sortField],
           improvement_percent: Math.round(improvement * 100) / 100,
           matches_played: current.total_matches,
+          metric_name: sortField, // Added to show which metric is being tracked
         });
       }
     });
@@ -425,40 +661,29 @@ class TennisLeaderboard extends PlayerAnalyticsAggregator {
 
     return {
       metric,
+      sort_field: sortField, // Added for clarity
       period_days: days,
       trending_players: improvements.slice(0, limit),
     };
   }
 }
 
-
-export const platformDistanceLeaderboardService = catchAsync(
-  async (req, res, next) => {
-    const { limit, startDate, endDate, minMatches, metric } = req.query;
-
-    const leaderboard = await TennisLeaderboard.getPlatformLeaderboard({
-      metric: metric || 'distance',
-      limit: parseInt(limit) || 50,
-      startDate: startDate ? new Date(startDate) : undefined,
-      endDate: endDate ? new Date(endDate) : undefined,
-      minMatches: parseInt(minMatches) || 1,
-    });
-
-    res.status(200).json({
-      status: 'success',
-      data: {
-        leaderboard,
-      },
-    });
-  }
-);
-
-export const networkLeaderboardService = catchAsync(async (req, res, next) => {
-  const { userId } = req.params;
+export const platformLeaderboardService = catchAsync(async (req, res, next) => {
   const { limit, startDate, endDate, minMatches, metric } = req.query;
 
-  const leaderboard = await TennisLeaderboard.getNetworkLeaderboard(userId, {
-    metric: metric || 'distance',
+  // Validate metric
+  const requestedMetric = metric || 'distance';
+  if (!TennisLeaderboard.isValidMetric(requestedMetric)) {
+    return res.status(400).json({
+      status: 'error',
+      message: `Invalid metric: ${requestedMetric}. Available metrics: ${Object.keys(
+        TennisLeaderboard.getAvailableMetrics()
+      ).join(', ')}`,
+    });
+  }
+
+  const leaderboard = await TennisLeaderboard.getPlatformLeaderboard({
+    metric: requestedMetric,
     limit: parseInt(limit) || 50,
     startDate: startDate ? new Date(startDate) : undefined,
     endDate: endDate ? new Date(endDate) : undefined,
@@ -469,87 +694,60 @@ export const networkLeaderboardService = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       leaderboard,
+      available_metrics: TennisLeaderboard.getAvailableMetrics(),
     },
   });
 });
 
-export const multipleLeaderboardsService = catchAsync(
-  async (req, res, next) => {
-    const { userId } = req.params;
-    const { startDate, endDate, minMatches, metric } = req.query;
-
-    const leaderboards = await TennisLeaderboard.getMultipleLeaderboards(
-      userId,
-      {
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        minMatches: parseInt(minMatches) || 1,
-        metric: metric || 'distance',
-      }
-    );
-
-    res.status(200).json({
-      status: 'success',
-      data: {
-        leaderboards,
-      },
-    });
-  }
-);
-
-export const userLeaderboardPositionService = catchAsync(
-  async (req, res, next) => {
-    const { userId } = req.params;
-    const { startDate, endDate, minMatches } = req.query;
-
-    const position = await TennisLeaderboard.getUserLeaderboardPosition(
-      userId,
-      {
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        minMatches: parseInt(minMatches) || 1,
-      }
-    );
-
-    res.status(200).json({
-      status: 'success',
-      data: {
-        position,
-      },
-    });
-  }
-);
-
-export const periodicLeaderboardsService = catchAsync(
-  async (req, res, next) => {
-    const { userId } = req.params;
-    const { startDate, endDate, minMatches, metric } = req.query;
-
-    const leaderboards = await TennisLeaderboard.getPeriodicLeaderboards(
-      userId,
-      {
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        minMatches: parseInt(minMatches) || 1,
-        metric: metric || 'distance',
-      }
-    );
-
-    res.status(200).json({
-      status: 'success',
-      data: {
-        leaderboards,
-      },
-    });
-  }
-);
-
-export const trendingPlayersService = catchAsync(async (req, res, next) => {
+export const networkLeaderboardService = catchAsync(async (req, res, next) => {
+  const { userId } = req.params;
   const { limit, startDate, endDate, minMatches, metric } = req.query;
 
+  // Validate metric
+  const requestedMetric = metric || 'distance';
+  if (!TennisLeaderboard.isValidMetric(requestedMetric)) {
+    return res.status(400).json({
+      status: 'error',
+      message: `Invalid metric: ${requestedMetric}. Available metrics: ${Object.keys(
+        TennisLeaderboard.getAvailableMetrics()
+      ).join(', ')}`,
+    });
+  }
+
+  const leaderboard = await TennisLeaderboard.getNetworkLeaderboard(userId, {
+    metric: requestedMetric,
+    limit: parseInt(limit) || 50,
+    startDate: startDate ? new Date(startDate) : undefined,
+    endDate: endDate ? new Date(endDate) : undefined,
+    minMatches: parseInt(minMatches) || 1,
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      leaderboard,
+      available_metrics: TennisLeaderboard.getAvailableMetrics(),
+    },
+  });
+});
+
+export const trendingPlayersService = catchAsync(async (req, res, next) => {
+  const { limit, metric, days } = req.query;
+
+  // Validate metric
+  const requestedMetric = metric || 'success_rate';
+  if (!TennisLeaderboard.isValidMetric(requestedMetric)) {
+    return res.status(400).json({
+      status: 'error',
+      message: `Invalid metric: ${requestedMetric}. Available metrics: ${Object.keys(
+        TennisLeaderboard.getAvailableMetrics()
+      ).join(', ')}`,
+    });
+  }
+
   const players = await TennisLeaderboard.getTrendingPlayers({
-    metric: metric || 'success_rate',
-    days: 30,
+    metric: requestedMetric,
+    days: parseInt(days) || 30,
     limit: parseInt(limit) || 15,
   });
 
@@ -557,8 +755,90 @@ export const trendingPlayersService = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       players,
+      available_metrics: TennisLeaderboard.getAvailableMetrics(),
     },
   });
 });
 
-  export default TennisLeaderboard;
+// Add a new endpoint to get available metrics
+export const getAvailableMetricsService = catchAsync(async (req, res, next) => {
+  const metrics = TennisLeaderboard.getAvailableMetrics();
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      metrics,
+    },
+  });
+});
+
+export const userLeaderboardPositionService = catchAsync(
+  async (req, res, next) => {
+    const { userId } = req.params;
+    const { metric } = req.query;
+
+    // Validate metric
+    const requestedMetric = metric || 'distance';
+    if (!TennisLeaderboard.isValidMetric(requestedMetric)) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Invalid metric: ${requestedMetric}. Available metrics: ${Object.keys(
+          TennisLeaderboard.getAvailableMetrics()
+        ).join(', ')}`,
+      });
+    }
+
+    const position = await TennisLeaderboard.getUserLeaderboardPosition(
+      userId,
+      {
+        metric: requestedMetric,
+      }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        position,
+        available_metrics: TennisLeaderboard.getAvailableMetrics(),
+      },
+    });
+  }
+);
+
+export const multipleLeaderboardsService = catchAsync(
+  async (req, res, next) => {
+    const { userId } = req.params;
+    const { metric, limit, startDate, endDate } = req.query;
+
+    // Validate metric
+    const requestedMetric = metric || 'distance';
+    if (!TennisLeaderboard.isValidMetric(requestedMetric)) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Invalid metric: ${requestedMetric}. Available metrics: ${Object.keys(
+          TennisLeaderboard.getAvailableMetrics()
+        ).join(', ')}`,
+      });
+    }
+
+    const leaderboards = await TennisLeaderboard.getMultipleLeaderboards(
+      userId,
+      {
+        metric: requestedMetric,
+        limit: parseInt(limit) || 50,
+        startDate: startDate ? new Date(startDate) : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+      }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        leaderboards,
+        available_metrics: TennisLeaderboard.getAvailableMetrics(),
+      },
+    });
+  }
+);
+
+export default TennisLeaderboard;
