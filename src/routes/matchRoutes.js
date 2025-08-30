@@ -14,8 +14,9 @@ import {
 import { videoUpload } from '../services/s3UploadService.js';
 import {
   addSubscriptionInfo,
-  setPriority
+  setPriority,
 } from '../middleware/subscriptionMiddleware.js';
+import { checkAnalysisQuotaService } from '../services/matchService.js';
 
 const router = Router();
 
@@ -29,11 +30,9 @@ router.get('/user-matches', getUserMatches);
 router.get('/analysis-quota', checkAnalysisQuota);
 
 // Video upload with subscription priority
-router.post('/upload_video', 
-  setPriority,
-  videoUpload, 
-  uploadVideo
-);
+router.post('/upload_video', setPriority, videoUpload, uploadVideo);
+
+router.get('/testing', checkAnalysisQuotaService);
 
 router.get('/profile', getUserProfile);
 

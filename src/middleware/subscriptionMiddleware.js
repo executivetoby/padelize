@@ -9,19 +9,21 @@ import { freePlan, proPlan } from '../models/Subscription.js';
  * @returns {Object} - Plan features
  */
 export const getUserPlanFeatures = (user) => {
-  if (!user.subscription || user.subscription.status !== 'active') {
+  if (!user.subscription) {
     return freePlan;
   }
 
   const plan = user.subscription.plan;
+
+  console.log({ plan });
 
   switch (true) {
     case plan === 'free':
       return freePlan;
     case plan.startsWith('pro'):
       return proPlan;
-    case plan.startsWith('max'):
-      return maxPlan;
+    // case plan.startsWith('max'):
+    //   return maxPlan;
     default:
       return freePlan;
   }

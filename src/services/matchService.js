@@ -17,6 +17,7 @@ import {
   filterAnalysisResultsBySubscription,
   getProcessingMessage,
 } from '../utils/subscriptionUtils.js';
+import analysisStatusCron from './cronService.js';
 
 export const createMatchServiceService = catchAsync(async (req, res, next) => {
   const match = await createOne(Match, req.body);
@@ -33,29 +34,52 @@ export const createMatchServiceService = catchAsync(async (req, res, next) => {
 });
 
 export const getMatchService = catchAsync(async (req, res, next) => {
+  const { _id: userId } = req.user;
+
+  console.log({ userId: userId.toString() });
+
   const [match, analysisStatus] = await Promise.all([
     findOne(
       Match,
       {
         _id: req.params.matchId,
       },
-      [{ path: 'analysisStatusId' }]
+      [
+        { path: 'analysisStatusId' },
+        {
+          path: 'creator',
+          populate: {
+            path: 'subscription',
+            model: 'Subscription',
+          },
+        },
+      ]
     ),
     findOne(AnalysisStatus, { match_id: req.params.matchId }),
   ]);
 
-  if (!match)
+  if (!match) return next(new AppError('No match found', 404));
+  // console.log(
+  //   'Creator Id:',
+  //   match.creator.id.toString() == userId.toString(),
+  //   match
+  // );
+
+  if (!match.public && userId.toString() != match.creator.id.toString()) {
+    console.log(userId.toString(), match.creator.id.toString());
     return next(
       new AppError(
-        'No match found or you are not authorized to view this match',
-        404
+        "You are not authorized to view this match because it's not made public",
+        403
       )
     );
+  }
+
+  const quotaCheck = await checkUserAnalysisQuota(req.user);
 
   if (!match.analysisStatus) {
     try {
       // Check subscription quota before auto-starting analysis
-      const quotaCheck = await checkUserAnalysisQuota(req.user);
 
       if (quotaCheck.canAnalyze) {
         await startVideoAnalysis(
@@ -105,19 +129,31 @@ export const getMatchService = catchAsync(async (req, res, next) => {
     }
   }
 
+  if (
+    match.analysisStatus === 'processing' ||
+    match.analysisStatus === 'pending'
+  ) {
+    await analysisStatusCron.checkSingleAnalysis(match);
+  }
+
   await match.save();
 
   let analysis = await findOne(Analysis, { match_id: match._id });
 
-  // Filter analysis results based on user's subscription
+  // Filter analysis results based on match creator's subscription and serialize properly
   if (analysis) {
-    analysis = filterAnalysisResultsBySubscription(analysis, req.user);
+    // Convert Mongoose document to plain object to avoid internal properties
+    const analysisObj = analysis.toObject ? analysis.toObject() : analysis;
+    // Use match creator's subscription, not the viewer's
+    analysis = filterAnalysisResultsBySubscription(analysisObj, match.creator);
   }
 
   res.status(200).json({
     status: 'success',
     message:
-      match.analysisStatus === 'failed'
+      !quotaCheck.canAnalyze && match.analysisStatus != 'completed'
+        ? 'Match analysis failed to start. You have exceeded your quota for this week.'
+        : match.analysisStatus === 'failed'
         ? 'Match analysis failed, restarting now...'
         : match.analysisStatus === 'processing' ||
           match.analysisStatus === 'pending'
@@ -319,6 +355,8 @@ export const uploadVideoService = catchAsync(async (req, res, next) => {
     // Check subscription quota before proceeding
     const quotaCheck = await checkUserAnalysisQuota(req.user);
 
+    console.log({ quotaCheck });
+
     const { path: tempPath, originalname } = req.file;
 
     const match = await findOne(Match, {
@@ -349,6 +387,8 @@ export const uploadVideoService = catchAsync(async (req, res, next) => {
       result.Location
     );
 
+    console.log('We got here after uploading!');
+
     // if (!quotaCheck.canAnalyze) {
     //   return next(
     //     new AppError(
@@ -359,20 +399,22 @@ export const uploadVideoService = catchAsync(async (req, res, next) => {
     // }
 
     // Auto-trigger video analysis after successful upload with subscription priority
-    try {
-      await startVideoAnalysis(
-        match,
-        req.user._id,
-        req.body,
-        quotaCheck.priority
-      );
-    } catch (analysisError) {
-      console.error('Auto-analysis failed:', analysisError);
-      await matchNotificationService.notifyAnalysisError(
-        req.user._id,
-        match,
-        'Video uploaded successfully, but auto-analysis failed. You can try again manually.'
-      );
+    if (quotaCheck.canAnalyze) {
+      try {
+        await startVideoAnalysis(
+          match,
+          req.user._id,
+          req.body,
+          quotaCheck.priority
+        );
+      } catch (analysisError) {
+        console.error('Auto-analysis failed:', analysisError);
+        await matchNotificationService.notifyAnalysisError(
+          req.user._id,
+          match,
+          'Video uploaded successfully, but auto-analysis failed. You can try again manually.'
+        );
+      }
     }
 
     res.status(200).json({
@@ -382,8 +424,11 @@ export const uploadVideoService = catchAsync(async (req, res, next) => {
         : `Uploaded successfully but you have reached your weekly limit of ${quotaCheck.totalAllowed} match analysis. Upgrade to Pro for more analyses.`,
       data: {
         match,
-        remainingAnalyses: quotaCheck.remainingAnalyses,
-        processingMessage: getProcessingMessage(quotaCheck.priority),
+        remainingAnalyses:
+          quotaCheck.remainingAnalyses > 0
+            ? quotaCheck.remainingAnalyses - 1
+            : 0,
+        // processingMessage: getProcessingMessage(quotaCheck.priority),
       },
     });
   } catch (error) {
@@ -565,6 +610,13 @@ const generateColorString = (match) => {
 export const checkAnalysisQuotaService = catchAsync(async (req, res, next) => {
   const quotaCheck = await checkUserAnalysisQuota(req.user);
 
+  // const
+
+  const analysesThisWeek = await Analysis.countDocuments({
+    created_by: req.user._id,
+    createdAt: { $gte: quotaCheck.startOfWeek },
+  });
+
   res.status(200).json({
     status: 'success',
     data: {
@@ -575,6 +627,7 @@ export const checkAnalysisQuotaService = catchAsync(async (req, res, next) => {
       plan: req.user.subscription?.plan || 'free',
       priority: quotaCheck.priority,
       processingMessage: getProcessingMessage(quotaCheck.priority),
+      analysesThisWeek,
     },
   });
 });

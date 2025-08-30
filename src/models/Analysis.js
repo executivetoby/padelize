@@ -1,43 +1,50 @@
 import mongoose from 'mongoose';
 
-// Schema for shot events
+// Schema for shot events (old format)
 const shotEventSchema = new mongoose.Schema(
   {
     frame: {
       type: Number,
-      required: true,
+      required: false, // Made optional for flexibility
     },
     start_frame: {
       type: Number,
-      required: true,
+      required: false,
     },
     end_frame: {
       type: Number,
-      required: true,
+      required: false,
+    },
+    timestamp: {
+      type: Number,
+      required: false, // New format uses timestamp
     },
     ball_pos: {
       type: [Number],
-      required: true,
+      required: false,
     },
     player_pos: {
       type: [Number],
-      required: true,
+      required: false,
     },
     velocity: {
       type: Number,
-      required: true,
+      required: false,
     },
     type: {
       type: String,
-      required: true,
+      required: false,
       enum: ['forehand', 'backhand', 'volley', 'smash'],
     },
     success: {
       type: Boolean,
-      required: true,
+      required: false,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+    strict: false, // Allow additional fields for new format
+  }
 );
 
 // Schema for shots summary
@@ -83,6 +90,78 @@ const shotsSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Schema for shot analytics (new format)
+const shotAnalyticsSchema = new mongoose.Schema(
+  {
+    forehand: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    backhand: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    volley: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    smash: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    total_shots: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: false }
+);
+
+// Schema for court info
+const courtInfoSchema = new mongoose.Schema(
+  {
+    length: {
+      type: Number,
+      // required: true,
+      min: 0,
+    },
+    width: {
+      type: Number,
+      // required: true,
+      min: 0,
+    },
+    corners: {
+      type: [[Number]],
+      // required: true,
+      // validate: {
+      //   validator: function (arr) {
+      //     return (
+      //       arr.length === 4 &&
+      //       arr.every(
+      //         (corner) =>
+      //           Array.isArray(corner) &&
+      //           corner.length === 2 &&
+      //           corner.every((coord) => typeof coord === 'number')
+      //       )
+      //     );
+      //   },
+      //   message:
+      //     'Court corners must be an array of 4 coordinate pairs [[x,y], [x,y], [x,y], [x,y]]',
+      // },
+    },
+    field_bbox: {
+      type: [Number],
+    },
+    wall_position_count: Number,
+  },
+  { _id: false }
+);
+
 // Schema for individual players
 const playerSchema = new mongoose.Schema(
   {
@@ -118,7 +197,17 @@ const playerSchema = new mongoose.Schema(
     },
     shots: {
       type: shotsSchema,
-      required: true,
+      required: function () {
+        // Required if shot_analytics is not present (backward compatibility)
+        return !this.shot_analytics;
+      },
+    },
+    shot_analytics: {
+      type: shotAnalyticsSchema,
+      required: function () {
+        // Required if shots is not present (new format)
+        return !this.shots;
+      },
     },
     shot_events: {
       type: [shotEventSchema],
@@ -198,6 +287,14 @@ const playerAnalyticsSchema = new mongoose.Schema(
       //   },
       //   message: 'At least one player must be present',
       // },
+    },
+    court_info: {
+      type: courtInfoSchema,
+      required: false, // Optional for backward compatibility
+    },
+    shot_events: {
+      type: [shotEventSchema],
+      required: false, // Optional - some formats have shot_events at top level
     },
   },
   { _id: false }

@@ -20,6 +20,7 @@ import connectDB from './connectDB.js';
 import webSocketService from './src/services/webSocketService.js';
 import analysisStatusCron from './src/services/cronService.js';
 import { initializeSubscriptionCronJobs } from './src/services/subscriptionCronService.js';
+import WebhookLogCronService from './src/services/webhookLogCronService.js';
 
 connectDB();
 
@@ -34,9 +35,12 @@ global.websocketService = webSocketService;
 const startServer = async () => {
   try {
     analysisStatusCron.start();
-    
+
     // Initialize subscription management cron jobs
     initializeSubscriptionCronJobs();
+
+    // Initialize webhook log maintenance cron jobs
+    WebhookLogCronService.initialize();
 
     const port = process.env.PORT || 9000;
     server.listen(port, () => {
@@ -45,7 +49,12 @@ const startServer = async () => {
           .bold.cyan
       );
       createLogger.info('Analysis status cron job is active'.bold.blue);
-      createLogger.info('Subscription management cron jobs are active'.bold.green);
+      createLogger.info(
+        'Subscription management cron jobs are active'.bold.green
+      );
+      createLogger.info(
+        'Webhook log maintenance cron jobs are active'.bold.magenta
+      );
     });
   } catch (error) {
     createLogger.error(`Error starting server: ${error.message}`.bold.red);
@@ -55,8 +64,9 @@ const startServer = async () => {
 const shutdown = async () => {
   console.log('Shutting down server...');
 
-  // Stop the cron job
+  // Stop the cron jobs
   analysisStatusCron.stop();
+  WebhookLogCronService.stop();
 
   // Close database connections, etc.
   process.exit(0);

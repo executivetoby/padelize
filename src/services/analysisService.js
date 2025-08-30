@@ -461,20 +461,37 @@ export const getAnalysisResultsService = catchAsync(async (req, res, next) => {
     const match = await Match.findOne({
       analysisId: analysisId,
       creator: userId,
+    }).populate({
+      path: 'creator',
+      populate: {
+        path: 'subscription',
+        model: 'Subscription',
+      },
     });
 
     if (!match) {
       return next(new AppError('Match not found or unauthorized', 404));
     }
 
+    // Import filtering function
+    const { filterAnalysisResultsBySubscription } = await import(
+      '../utils/subscriptionUtils.js'
+    );
+
+    // Apply subscription-based filtering based on match creator's subscription
+    const filteredResults = filterAnalysisResultsBySubscription(
+      results,
+      match.creator
+    );
+
     // Update match with final results
     match.analysisStatus = 'completed';
-    match.analysisResults = results;
+    match.analysisResults = filteredResults; // Store filtered results
     await match.save();
 
     res.status(200).json({
       status: 'success',
-      data: { results, match },
+      data: { results: filteredResults, match },
     });
   } catch (error) {
     return next(new AppError(`Results fetch failed: ${error.message}`, 500));

@@ -428,13 +428,30 @@ export const getAnalysisResultsService = catchAsync(async (req, res, next) => {
   try {
     const results = await VideoAnalysisService.getAnalysisResults(analysisId);
 
-    const match = await Match.findOne(Match, {
+    const match = await Match.findOne({
       analysisId: analysisId,
+    }).populate({
+      path: 'creator',
+      populate: {
+        path: 'subscription',
+        model: 'Subscription',
+      },
     });
+
+    // Import filtering function
+    const { filterAnalysisResultsBySubscription } = await import(
+      '../utils/subscriptionUtils.js'
+    );
+
+    // Apply subscription-based filtering based on match creator's subscription
+    const filteredResults = filterAnalysisResultsBySubscription(
+      results,
+      match.creator
+    );
 
     res.status(200).json({
       status: 'success',
-      data: { results, match },
+      data: { results: filteredResults, match },
     });
   } catch (error) {
     return next(new AppError(`Results fetch failed: ${error.message}`, 500));

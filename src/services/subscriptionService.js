@@ -10,6 +10,7 @@ import SubscriptionHistory from '../models/SubscriptionHistory.js';
 import Payment from '../models/Payment.js';
 import { findOne, getAll } from '../factory/repo.js';
 import Package from '../models/Package.js';
+import WebhookLogService from './webhookLogService.js';
 
 const stripe = new Stripe(config.stripe.secretKey);
 
@@ -201,7 +202,7 @@ const getExpiryTerm = (plan) => {
 
 //     // Get user ID from session metadata
 //     const userId = session.metadata.userId;
-//     const plan = session.metadata.plan;
+//     const plan = session.metadata.plan;`````````````````````
 
 //     const expiry = getExpiryTerm(plan);
 
@@ -285,21 +286,64 @@ export const handleSubscriptionSuccessService = catchAsync(
 export const stripeWebhook = catchAsync(async (req, res, next) => {
   const signature = req.headers['stripe-signature'];
   let event;
+  let webhookLog;
+  let signatureVerified = false;
 
+  // First, log the incoming webhook request
+  try {
+    webhookLog = await WebhookLogService.logIncomingWebhook(req, null, false);
+  } catch (logError) {
+    console.error('Failed to log incoming webhook:', logError.message);
+    // Continue processing even if logging fails
+  }
+
+  // Try to verify the webhook signature
   try {
     event = stripe.webhooks.constructEvent(
       req.body,
       signature,
       config.stripe.webhookSecret
     );
+    signatureVerified = true;
+
+    // Update log with parsed event data
+    if (webhookLog) {
+      await WebhookLogService.updateWebhookStatus(
+        webhookLog._id,
+        'processing',
+        {
+          metadata: { signatureVerified: true },
+        }
+      );
+
+      // Update with parsed event details
+      webhookLog.stripeEventId = event.id;
+      webhookLog.eventType = event.type;
+      webhookLog.data = event.data;
+      webhookLog.signatureVerified = true;
+      await webhookLog.save();
+    }
   } catch (err) {
     console.error('Stripe webhook signature verification failed:', err.message);
+
+    // Update log with error
+    if (webhookLog) {
+      await WebhookLogService.markWebhookFailed(
+        webhookLog._id,
+        `Signature verification failed: ${err.message}`,
+        err.stack,
+        400
+      );
+    }
+
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   console.log(`Received webhook event: ${event.type}, ID: ${event.id}`);
 
   try {
+    const startTime = Date.now();
+
     switch (event.type) {
       case 'checkout.session.completed':
         await handleCheckoutSessionCompleted(event.data.object);
@@ -322,11 +366,47 @@ export const stripeWebhook = catchAsync(async (req, res, next) => {
         break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
+        // Update log for unhandled events
+        if (webhookLog) {
+          await WebhookLogService.updateWebhookStatus(
+            webhookLog._id,
+            'ignored',
+            {
+              responseStatus: 200,
+              responseBody: { received: true, note: 'Unhandled event type' },
+              metadata: { reason: 'Unhandled event type' },
+            }
+          );
+        }
+        break;
     }
-    
+
+    const processingTime = Date.now() - startTime;
+
+    // Mark as completed
+    if (webhookLog) {
+      await WebhookLogService.markWebhookCompleted(
+        webhookLog._id,
+        200,
+        { received: true },
+        processingTime
+      );
+    }
+
     res.status(200).json({ received: true });
   } catch (err) {
     console.error('Error processing Stripe webhook event:', err);
+
+    // Mark as failed
+    if (webhookLog) {
+      await WebhookLogService.markWebhookFailed(
+        webhookLog._id,
+        `Webhook processing failed: ${err.message}`,
+        err.stack,
+        500
+      );
+    }
+
     res.status(500).send('Webhook handler failed');
   }
 });
@@ -1103,10 +1183,11 @@ export const cancelSubscriptionService = catchAsync(async (req, res, next) => {
 
       return res.status(200).json({
         status: 'success',
-        message: 'Subscription will be canceled at the end of the billing period',
+        message:
+          'Subscription will be canceled at the end of the billing period',
         data: {
-          cancelAtPeriodEnd: subscription.currentPeriodEnd
-        }
+          cancelAtPeriodEnd: subscription.currentPeriodEnd,
+        },
       });
     } else {
       // For other statuses (past_due, incomplete, etc.), cancel immediately
@@ -1133,7 +1214,7 @@ export const cancelSubscriptionService = catchAsync(async (req, res, next) => {
     }
   } catch (stripeError) {
     console.error('Stripe error during cancellation:', stripeError);
-    
+
     // If Stripe returns an error about subscription already being canceled
     if (stripeError.message?.includes('canceled subscription')) {
       subscription.status = 'canceled';
@@ -1146,91 +1227,103 @@ export const cancelSubscriptionService = catchAsync(async (req, res, next) => {
       });
     }
 
-    return next(new AppError(`Failed to cancel subscription: ${stripeError.message}`, 500));
+    return next(
+      new AppError(`Failed to cancel subscription: ${stripeError.message}`, 500)
+    );
   }
 });
 
-export const cancelSubscriptionImmediatelyService = catchAsync(async (req, res, next) => {
-  const { id: userId } = req.user;
+export const cancelSubscriptionImmediatelyService = catchAsync(
+  async (req, res, next) => {
+    const { id: userId } = req.user;
 
-  // Find subscription for user
-  const subscription = await Subscription.findOne({ user: userId });
+    // Find subscription for user
+    const subscription = await Subscription.findOne({ user: userId });
 
-  if (!subscription) return next(new AppError('No subscription found', 404));
+    if (!subscription) return next(new AppError('No subscription found', 404));
 
-  // Check if subscription is already canceled
-  if (subscription.status === 'canceled') {
-    return res.status(200).json({
-      status: 'success',
-      message: 'Subscription is already canceled',
-    });
-  }
+    // Check if subscription is already canceled
+    if (subscription.status === 'canceled') {
+      return res.status(200).json({
+        status: 'success',
+        message: 'Subscription is already canceled',
+      });
+    }
 
-  // Check if subscription is free plan (no Stripe subscription to cancel)
-  if (subscription.plan === 'free' || !subscription.stripeSubscriptionId) {
-    subscription.status = 'canceled';
-    await subscription.save();
-
-    return res.status(200).json({
-      status: 'success',
-      message: 'Free subscription canceled successfully',
-    });
-  }
-
-  try {
-    // Cancel immediately in Stripe
-    await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
-
-    // Update subscription in database
-    subscription.status = 'canceled';
-    subscription.cancelAtPeriodEnd = true;
-    await subscription.save();
-
-    // Create a new free subscription
-    const freeSubscription = await Subscription.create({
-      user: userId,
-      plan: 'free',
-      status: 'active',
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-    });
-
-    // Update user to point to new free subscription
-    await User.findByIdAndUpdate(userId, { subscription: freeSubscription._id });
-
-    await SubscriptionHistory.create({
-      user: userId,
-      subscription: freeSubscription._id,
-      changeType: 'canceled',
-      previousPlan: subscription.plan,
-      newPlan: 'free',
-      effectiveDate: new Date(),
-      notes: 'Subscription canceled immediately and downgraded to free',
-    });
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Subscription canceled immediately. You have been downgraded to the free plan.',
-      data: {
-        newSubscription: freeSubscription
-      }
-    });
-  } catch (stripeError) {
-    console.error('Stripe error during immediate cancellation:', stripeError);
-    
-    if (stripeError.message?.includes('canceled subscription')) {
+    // Check if subscription is free plan (no Stripe subscription to cancel)
+    if (subscription.plan === 'free' || !subscription.stripeSubscriptionId) {
       subscription.status = 'canceled';
       await subscription.save();
 
       return res.status(200).json({
         status: 'success',
-        message: 'Subscription was already canceled',
+        message: 'Free subscription canceled successfully',
       });
     }
 
-    return next(new AppError(`Failed to cancel subscription: ${stripeError.message}`, 500));
+    try {
+      // Cancel immediately in Stripe
+      await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
+
+      // Update subscription in database
+      subscription.status = 'canceled';
+      subscription.cancelAtPeriodEnd = true;
+      await subscription.save();
+
+      // Create a new free subscription
+      const freeSubscription = await Subscription.create({
+        user: userId,
+        plan: 'free',
+        status: 'active',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      });
+
+      // Update user to point to new free subscription
+      await User.findByIdAndUpdate(userId, {
+        subscription: freeSubscription._id,
+      });
+
+      await SubscriptionHistory.create({
+        user: userId,
+        subscription: freeSubscription._id,
+        changeType: 'canceled',
+        previousPlan: subscription.plan,
+        newPlan: 'free',
+        effectiveDate: new Date(),
+        notes: 'Subscription canceled immediately and downgraded to free',
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message:
+          'Subscription canceled immediately. You have been downgraded to the free plan.',
+        data: {
+          newSubscription: freeSubscription,
+        },
+      });
+    } catch (stripeError) {
+      console.error('Stripe error during immediate cancellation:', stripeError);
+
+      if (stripeError.message?.includes('canceled subscription')) {
+        subscription.status = 'canceled';
+        await subscription.save();
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Subscription was already canceled',
+        });
+      }
+
+      return next(
+        new AppError(
+          `Failed to cancel subscription: ${stripeError.message}`,
+          500
+        )
+      );
+    }
   }
-});
+);
 
 export const getCurrentSubscriptionService = catchAsync(
   async (req, res, next) => {

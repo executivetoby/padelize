@@ -47,6 +47,10 @@ const matchSchema = new Schema(
       type: String,
       unique: true,
     },
+    public: {
+      type: Boolean,
+      default: false,
+    },
     analysisStatus: {
       type: String,
       enum: [

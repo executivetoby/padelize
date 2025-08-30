@@ -385,6 +385,8 @@ class AnalysisStatusCronJob {
 
       const status = await VideoAnalysisService.getAnalysisStatus(matchId);
 
+      console.log({ status });
+
       let analysisStatus = await findOne(AnalysisStatus, { match_id: matchId });
 
       if (!analysisStatus) {
@@ -446,6 +448,8 @@ class AnalysisStatusCronJob {
 
       // Get the analysis results
       const results = await VideoAnalysisService.getAnalysisResults(matchId);
+
+      console.log({ results });
 
       // Update match with results and status
       await Match.findByIdAndUpdate(matchId, {
