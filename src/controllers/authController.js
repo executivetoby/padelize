@@ -12,6 +12,7 @@ import {
   resetPasswordService,
   sendOTPService,
   signupService,
+  verifyEmailService,
 } from '../services/authService.js';
 import AppError from '../utils/appError.js';
 import catchAsync from '../utils/catchAsync.js';
@@ -38,6 +39,10 @@ export const changePassword = catchAsync(async (req, res, next) => {
 
 export const sendOTP = catchAsync(async (req, res, next) => {
   sendOTPService(req, res, next);
+});
+
+export const verifyEmail = catchAsync(async (req, res, next) => {
+  verifyEmailService(req, res, next);
 });
 
 export const googleSignIn = catchAsync(async (req, res, next) => {

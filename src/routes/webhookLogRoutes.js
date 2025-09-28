@@ -10,13 +10,13 @@ import {
   getEventDistribution,
   getProcessingTimeline,
 } from '../controllers/webhookLogController.js';
-import { protect, restrictTo } from '../controllers/authController.js';
+import { protect } from '../controllers/authController.js';
 
 const router = express.Router();
 
 // Protect all webhook log routes - only admins should access
 router.use(protect);
-router.use(restrictTo('admin'));
+// router.use(restrictTo('admin'));
 
 // General webhook log routes
 router.get('/', getWebhookLogs);

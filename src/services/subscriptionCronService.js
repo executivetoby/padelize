@@ -578,7 +578,7 @@ const handleFailedPayments = catchAsync(async () => {
           <p>We've been unable to process payment for your <strong>${subscription.plan}</strong> subscription for the past 7 days.</p>
           <p>As a result, your subscription has been canceled and you have been moved to our <strong>free plan</strong>.</p>
           <p><strong>What happened:</strong></p>
-          <ul>
+        <ul>
             <li>Multiple payment attempts failed</li>
             <li>Your subscription has been automatically canceled</li>
             <li>You now have access to free plan features only</li>

@@ -3,6 +3,10 @@ import User from '../models/User.js';
 import Subscription from '../models/Subscription.js';
 import AppError from '../utils/appError.js';
 import catchAsync from '../utils/catchAsync.js';
+import Stripe from 'stripe';
+import config from '../config/config.js';
+
+const stripe = new Stripe(config.stripe.secretKey);
 
 class WebhookLogService {
   /**
@@ -17,16 +21,29 @@ class WebhookLogService {
     stripeEvent = null,
     signatureVerified = false
   ) {
+    let event;
+    const signature = req.headers['stripe-signature'];
     try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        signature,
+        config.stripe.webhookSecret
+      );
       const webhookData = {
         method: req.method,
         headers: req.headers,
-        rawBody: JSON.stringify(req.body),
+        rawBody: JSON.stringify(event),
         sourceIp: req.ip || req.connection.remoteAddress,
         userAgent: req.headers['user-agent'],
         signatureVerified,
         status: 'pending',
       };
+
+      // console.log('Logging incoming webhook:', {
+      //   webhookData,
+      //   stripeEvent,
+      //   signatureVerified,
+      // });
 
       // If we have a parsed Stripe event, extract information
       if (stripeEvent) {

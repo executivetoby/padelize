@@ -244,6 +244,37 @@ export const sendOTPService = catchAsync(async (req, res, next) => {
   });
 });
 
+export const verifyEmailService = catchAsync(async (req, res, next) => {
+  const { pin } = req.body;
+
+  const token = await findTokenByPin(pin);
+
+  console.log({ token });
+
+  console.log(Date.now(), Date.parse(token.updatedAt) + 5 * 60 * 1000);
+
+  if (!token || Date.now() > Date.parse(token.updatedAt) + 5 * 60 * 1000)
+    return next(new AppError('Invalid token or expired token', 400));
+
+  const user = await findUserByEmail(User, token.email);
+
+  if (!user) return next(new AppError('User not found', 404));
+
+  user.verified = true;
+
+  await user.save();
+
+  // await deleteToken(pin);
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Email verified successfully',
+    data: {
+      user,
+    },
+  });
+});
+
 import { OAuth2Client } from 'google-auth-library';
 import FirebaseToken from '../models/FirebaseToken.js';
 

@@ -10,6 +10,7 @@ import {
   resetPassword,
   sendOTP,
   signup,
+  verifyEmail,
 } from '../controllers/authController.js';
 
 const router = Router();
@@ -21,6 +22,7 @@ router.post('/reset_password', resetPassword);
 router.post('/google', googleSignIn);
 router.post('/facebook_signin', facebookSignIn);
 router.post('/apple_signin', appleSignIn);
+router.post('/verify_email', verifyEmail);
 
 router.use(protect);
 router.post('/send_otp', sendOTP);

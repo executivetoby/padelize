@@ -16,8 +16,8 @@ export default {
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     prices: {
       pro_monthly: STRIPE_PRO_MONTHLY_PRICE,
-      max_monthly: STRIPE_PRO_YEARLY_PRICE,
-      pro_yearly: STRIPE_MAX_MONTHLY_PRICE,
+      max_monthly: STRIPE_MAX_MONTHLY_PRICE,
+      pro_yearly: STRIPE_PRO_YEARLY_PRICE,
       max_yearly: STRIPE_MAX_YEARLY_PRICE,
     },
   },

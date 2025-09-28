@@ -112,12 +112,15 @@ export const createCheckoutSessionService = catchAsync(
     const { plan } = req.body;
     const { id: userId } = req.user;
 
-    if (
-      !['pro_monthly', 'pro_yearly', 'max_monthly', 'max_yearly'].includes(plan)
-    )
+    console.log(`Creating checkout session for plan: ${plan}, user: ${userId}`);
+
+    if (!['pro_monthly', 'pro_yearly'].includes(plan))
       return next(new AppError('Invalid plan selected', 400));
 
     const user = await User.findById(userId);
+    if (!user) {
+      return next(new AppError('User not found', 404));
+    }
 
     // Check if user already has a subscription
     let subscription = await Subscription.findOne({ user: userId });
@@ -126,54 +129,75 @@ export const createCheckoutSessionService = catchAsync(
     let stripeCustomerId;
     if (subscription && subscription.stripeCustomerId) {
       stripeCustomerId = subscription.stripeCustomerId;
+      console.log(`Using existing Stripe customer: ${stripeCustomerId}`);
     } else {
       const customer = await createCustomer(user);
       stripeCustomerId = customer.id;
+      console.log(`Created new Stripe customer: ${stripeCustomerId}`);
+      // await user.save();
     }
 
     // Determine price ID based on selected plan
     const priceId = config.stripe.prices[plan];
+    console.log(`Price ID for plan ${plan}: ${priceId}`);
 
-    console.log({ priceId });
+    if (!priceId) {
+      return next(new AppError(`Price ID not found for plan: ${plan}`, 400));
+    }
 
-    // Create a checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomerId,
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: 'subscription',
-      // success_url: `${req.protocol}://${req.get(
-      //   'host'
-      // )}/api/v1/subscriptions/success?session_id={CHECKOUT_SESSION_ID}`,
-      success_url: `${req.protocol}://${req.get('host')}
-      )}`,
-      cancel_url: `${req.protocol}://${req.get(
-        'host'
-      )}/api/v1/subscriptions/cancel`,
-      metadata: {
-        userId: userId.toString(),
-        plan,
-      },
-      subscription_data: {
+    // Construct URLs
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const successUrl = `${protocol}://${host}/api/v1/subscriptions/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${protocol}://${host}/api/v1/subscriptions/cancel`;
+
+    console.log(`Success URL: ${successUrl}`);
+    console.log(`Cancel URL: ${cancelUrl}`);
+
+    try {
+      // Create a checkout session
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        mode: 'subscription',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
         metadata: {
           userId: userId.toString(),
           plan,
         },
-      },
-    });
+        subscription_data: {
+          metadata: {
+            userId: userId.toString(),
+            plan,
+          },
+        },
+      });
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Checkout session created successfully',
-      data: {
-        session,
-      },
-    });
+      console.log(`Checkout session created successfully: ${session.id}`);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Checkout session created successfully',
+        data: {
+          session,
+        },
+      });
+    } catch (stripeError) {
+      console.error('Stripe checkout session creation error:', stripeError);
+      return next(
+        new AppError(
+          `Failed to create checkout session: ${stripeError.message}`,
+          500
+        )
+      );
+    }
   }
 );
 
@@ -189,79 +213,6 @@ const getExpiryTerm = (plan) => {
     ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 };
-
-// export const handleSubscriptionSuccessService = catchAsync(
-//   async (req, res, next) => {
-//     const { sessionId } = req.body;
-
-//     if (!sessionId) return next(new AppError('Session ID not provided', 400));
-
-//     console.log({ sessionId });
-
-//     const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-//     // Get user ID from session metadata
-//     const userId = session.metadata.userId;
-//     const plan = session.metadata.plan;`````````````````````
-
-//     const expiry = getExpiryTerm(plan);
-
-//     // Create or update subscription record
-//     let subscription = await Subscription.findOne({
-//       user: new Types.ObjectId(userId),
-//     });
-
-//     const originalPlan = subscription && subscription.plan;
-
-//     console.log({ subscription });
-
-//     if (!subscription) {
-//       subscription = new Subscription({
-//         user: userId,
-//         plan,
-//         stripeCustomerId: session.customer,
-//         stripeSubscriptionId: session.subscription,
-//         status: 'active',
-//         currentPeriodStart: new Date(),
-//         currentPeriodEnd: expiry,
-//       });
-//     } else {
-//       // Store the original plan for history
-//       subscription.plan = plan;
-//       subscription.stripeSubscriptionId = session.subscription;
-//       subscription.status = 'active';
-//       subscription.currentPeriodStart = new Date();
-//       subscription.currentPeriodEnd = expiry;
-//     }
-
-//     await subscription.save();
-
-//     console.log({ subscription });
-
-//     await SubscriptionHistory.create({
-//       user: userId,
-//       subscription: subscription._id,
-//       changeType: subscription.isNew ? 'created' : 'upgraded',
-//       previousPlan: subscription.isNew ? 'free' : originalPlan,
-//       newPlan: plan,
-//       effectiveDate: new Date(),
-//       notes: subscription.isNew
-//         ? `Subscription created for ${plan} plan`
-//         : `Subscription upgraded from ${originalPlan} to ${plan} plan`,
-//     });
-
-//     // Update user with subscription reference
-//     await User.findByIdAndUpdate(userId, { subscription: subscription._id });
-
-//     res.status(200).json({
-//       status: 'success',
-//       message: 'Subscription created successfully',
-//       data: {
-//         subscription,
-//       },
-//     });
-//   }
-// );
 
 export const handleSubscriptionSuccessService = catchAsync(
   async (req, res, next) => {
@@ -488,24 +439,36 @@ const handleCheckoutSessionCompleted = async (session) => {
         ? 'upgraded'
         : prevTier > currentTier
         ? 'downgraded'
-        : prevPlan !== plan
+        : originalPlan !== plan
         ? 'billing changed'
         : 'maintained';
 
     console.log({ prevTier, currentTier, changeType });
 
-    // Record subscription history
-    await SubscriptionHistory.create({
-      user: userId,
+    // Record subscription history only if this is truly a new subscription
+    // or if no recent history exists (to prevent duplicates from multiple webhook events)
+    const existingHistory = await SubscriptionHistory.findOne({
       subscription: subscription._id,
-      changeType: subscription.isNew ? 'created' : 'upgraded',
-      previousPlan: subscription.isNew ? 'free' : originalPlan,
-      newPlan: plan,
-      effectiveDate: new Date(),
-      notes: subscription.isNew
-        ? `Subscription created for ${plan} plan`
-        : `Subscription ${changeType} from ${originalPlan} to ${plan} plan`,
+      createdAt: { $gte: new Date(Date.now() - 60000) }, // Within last minute
     });
+
+    if (!existingHistory) {
+      await SubscriptionHistory.create({
+        user: userId,
+        subscription: subscription._id,
+        changeType: subscription.isNew ? 'created' : 'upgraded',
+        previousPlan: subscription.isNew ? 'free' : originalPlan,
+        newPlan: plan,
+        effectiveDate: new Date(),
+        notes: subscription.isNew
+          ? `Subscription created for ${plan} plan`
+          : `Subscription ${changeType} from ${originalPlan} to ${plan} plan`,
+      });
+    } else {
+      console.log(
+        `Skipping duplicate history creation for subscription ${subscription._id}`
+      );
+    }
 
     // Update user with subscription reference
     await User.findByIdAndUpdate(userId, { subscription: subscription._id });
@@ -528,6 +491,34 @@ const handleSubscriptionUpdated = async (subscription) => {
 
     console.log(`Processing subscription update for: ${stripeSubscriptionId}`);
 
+    const cancelAtPeriodEnd = subscription.cancel_at_period_end;
+    const currentPeriodEnd = new Date(
+      subscription.items.data[0].current_period_end * 1000
+    );
+    const currentPeriodStart = new Date(
+      subscription.items.data[0].current_period_start * 1000
+    );
+
+    console.log({ cancelAtPeriodEnd, currentPeriodEnd, currentPeriodStart });
+
+    // Define price to plan mapping once
+    const priceToPlans = {
+      [config.stripe.prices.pro_monthly]: 'pro_monthly',
+      [config.stripe.prices.max_monthly]: 'max_monthly',
+      [config.stripe.prices.pro_yearly]: 'pro_yearly',
+      [config.stripe.prices.max_yearly]: 'max_yearly',
+    };
+
+    // Get current plan from subscription
+    const price = subscription.items.data[0].price;
+    const priceId = price.id;
+    const currentPlan = priceToPlans[priceId];
+
+    if (!currentPlan) {
+      console.error(`Unknown price ID: ${priceId}`);
+      throw new Error(`Unknown price ID: ${priceId}`);
+    }
+
     // Find subscription by Stripe subscription ID
     let dbSubscription = await Subscription.findOne({ stripeSubscriptionId });
 
@@ -535,6 +526,7 @@ const handleSubscriptionUpdated = async (subscription) => {
       // If subscription doesn't exist in our DB but Stripe says it exists,
       // we need to create it (this might happen if success route was bypassed)
 
+      console.log('If!!!!!!!!!!!!!!!!!!');
       // First, get the customer to find the associated user
       const customer = await stripe.customers.retrieve(customerId);
       let userId = customer.metadata?.userId; // We stored this when creating the customer
@@ -550,53 +542,51 @@ const handleSubscriptionUpdated = async (subscription) => {
             'Cannot create subscription: No userId in customer metadata or matching customer ID',
             customerId
           );
-          return;
+          throw new Error(`Cannot find user for customer: ${customerId}`);
         }
       }
 
-      // Determine the plan based on the price
-      const price = subscription.items.data[0].price;
-      const priceId = price.id;
-
-      // Map the price ID to plan name - you'd need to maintain this mapping
-      const priceToPlans = {
-        [config.stripe.prices.pro_monthly]: 'pro_monthly',
-        [config.stripe.prices.max_monthly]: 'max_monthly',
-        [config.stripe.prices.pro_yearly]: 'pro_yearly',
-        [config.stripe.prices.max_yearly]: 'max_yearly',
-      };
-
-      const plan = priceToPlans[priceId] || 'pro_monthly'; // Default to pro_monthly if mapping fails
-
       // Get the expiry term based on plan
-      const expiry = getExpiryTerm(plan);
+      const expiry = getExpiryTerm(currentPlan);
 
       // Create new subscription in database
       dbSubscription = new Subscription({
         user: userId,
-        plan,
+        plan: currentPlan,
         stripeCustomerId: customerId,
         stripeSubscriptionId,
         status: subscription.status,
-        currentPeriodStart: new Date(subscription.created * 1000),
+        currentPeriodStart: new Date(
+          subscription.items.data[0].current_period_start * 1000
+        ),
         currentPeriodEnd:
-          expiry || new Date(subscription.current_period_end * 1000),
+          expiry ||
+          new Date(subscription.items.data[0].current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         created: new Date(),
       });
 
       await dbSubscription.save();
 
-      // Create subscription history record
-      await SubscriptionHistory.create({
+      // Create subscription history record only if no recent history exists
+      const existingHistory = await SubscriptionHistory.findOne({
         user: userId,
-        subscription: dbSubscription._id,
-        changeType: 'created',
-        previousPlan: 'free',
-        newPlan: plan,
-        effectiveDate: new Date(),
-        notes: `Subscription created from webhook event`,
+        createdAt: { $gte: new Date(Date.now() - 60000) }, // Within last minute
       });
+
+      if (!existingHistory) {
+        await SubscriptionHistory.create({
+          user: userId,
+          subscription: dbSubscription._id,
+          changeType: 'created',
+          previousPlan: 'free',
+          newPlan: currentPlan,
+          effectiveDate: new Date(),
+          notes: `Subscription created from webhook event`,
+        });
+      } else {
+        console.log(`Skipping duplicate history creation for user ${userId}`);
+      }
 
       // Update user with subscription reference
       await User.findByIdAndUpdate(userId, {
@@ -606,63 +596,54 @@ const handleSubscriptionUpdated = async (subscription) => {
       console.log(
         `Created new subscription ${dbSubscription._id} for user ${userId} via webhook`
       );
+      return dbSubscription; // Prevent duplicate history creation
     } else {
-      // Check if plan has changed
-      const price = subscription.items.data[0].price;
-      const priceId = price.id;
-
-      // Map the price ID to plan name
-      const priceToPlans = {
-        [config.stripe.prices.pro_monthly]: 'pro_monthly',
-        [config.stripe.prices.max_monthly]: 'max_monthly',
-        [config.stripe.prices.pro_yearly]: 'pro_yearly',
-        [config.stripe.prices.max_yearly]: 'max_yearly',
-      };
-
-      const newPlan = priceToPlans[priceId] || dbSubscription.plan;
-      const oldPlan = dbSubscription.plan;
-      const planChanged = newPlan !== oldPlan;
-
-      // Store old status to check for changes
-      const oldStatus = dbSubscription.status;
-
       // Update existing subscription
+      const oldPlan = dbSubscription.plan;
+      const oldStatus = dbSubscription.status;
+      const planChanged = currentPlan !== oldPlan;
+      const statusChanged = subscription.status !== oldStatus;
+
+      // Update subscription fields
       dbSubscription.status = subscription.status;
-      if (planChanged) {
-        dbSubscription.plan = newPlan;
-      }
-
-      dbSubscription.currentPeriodStart = new Date(subscription.created * 1000);
-
-      // Update the expiry date based on plan if it changed
-      if (planChanged) {
-        const expiry = getExpiryTerm(newPlan);
-        dbSubscription.currentPeriodEnd =
-          expiry || new Date(subscription.current_period_end * 1000);
-      } else {
-        dbSubscription.currentPeriodEnd =
-          expiry || new Date(subscription.current_period_end * 1000);
-      }
-
+      dbSubscription.plan = currentPlan;
+      dbSubscription.currentPeriodStart = new Date(
+        subscription.items.data[0].current_period_start * 1000
+      );
       dbSubscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
       dbSubscription.updatedAt = new Date();
+
+      // Update expiry date (always recalculate to ensure consistency)
+      const expiry = getExpiryTerm(currentPlan);
+      dbSubscription.currentPeriodEnd =
+        expiry ||
+        new Date(subscription.items.data[0].current_period_end * 1000);
 
       await dbSubscription.save();
 
       // Record history if plan or status changed
-      if (planChanged || oldStatus !== subscription.status) {
-        const changeType = planChanged ? 'plan_changed' : 'status_changed';
+      if (planChanged || statusChanged) {
+        let changeType, notes;
+
+        if (planChanged && statusChanged) {
+          changeType = 'plan_and_status_changed';
+          notes = `Plan changed from ${oldPlan} to ${currentPlan} and status changed from ${oldStatus} to ${subscription.status}`;
+        } else if (planChanged) {
+          changeType = 'plan_changed';
+          notes = `Plan changed from ${oldPlan} to ${currentPlan}`;
+        } else {
+          changeType = 'status_changed';
+          notes = `Status changed from ${oldStatus} to ${subscription.status}`;
+        }
 
         await SubscriptionHistory.create({
           user: dbSubscription.user,
           subscription: dbSubscription._id,
           changeType,
           previousPlan: oldPlan,
-          newPlan: newPlan,
+          newPlan: currentPlan,
           effectiveDate: new Date(),
-          notes: planChanged
-            ? `Plan changed from ${oldPlan} to ${newPlan}`
-            : `Status changed from ${oldStatus} to ${subscription.status}`,
+          notes,
         });
 
         console.log(
@@ -679,40 +660,11 @@ const handleSubscriptionUpdated = async (subscription) => {
     return dbSubscription;
   } catch (error) {
     console.error('Error updating subscription:', error);
+    // Re-throw the error so calling code can handle it appropriately
+    // In a webhook context, you might want to return a 500 status
+    throw error;
   }
 };
-
-// const handleSubscriptionUpdated = async (subscription) => {
-//   try {
-//     const stripeSubscriptionId = subscription.id;
-
-//     // Find subscription by Stripe subscription ID
-//     const dbSubscription = await Subscription.findOne({ stripeSubscriptionId });
-//     createLogger.info(`Updating subscription with ID: ${stripeSubscriptionId}`);
-
-//     if (!dbSubscription) {
-//       console.error('Subscription not found:', stripeSubscriptionId);
-//       createLogger.error(
-//         `Subscription not found for ID: ${stripeSubscriptionId}`
-//       );
-//       return;
-//     }
-
-//     // Update subscription status and dates
-//     dbSubscription.status = subscription.status;
-//     dbSubscription.currentPeriodStart = new Date(
-//       subscription.created * 1000
-//     );
-//     dbSubscription.currentPeriodEnd = new Date(
-//       subscription.current_period_end * 1000
-//     );
-//     dbSubscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
-
-//     await dbSubscription.save();
-//   } catch (error) {
-//     console.error('Error updating subscription:', error);
-//   }
-// };
 
 const handleSubscriptionDeleted = async (subscription) => {
   try {
@@ -890,82 +842,6 @@ const handlePaymentSucceeded = async (invoice) => {
   }
 };
 
-// const handlePaymentSucceeded = async (invoice) => {
-//   try {
-//     const dbPayment = await findOne(Payment, { stripeInvoiceId: invoice.id });
-
-//     if (dbPayment) {
-//       console.log('Payment already exists:', invoice.id);
-//       return;
-//     }
-
-//     const subscriptionId = invoice.parent.subscription_details.subscription;
-
-//     // Find subscription in our database
-//     const subscription = await Subscription.findOne({
-//       stripeSubscriptionId: subscriptionId,
-//     });
-
-//     if (!subscription) {
-//       console.error('Subscription not found for invoice:', invoice.id);
-//       return;
-//     }
-
-//     // Update subscription status
-//     subscription.status = 'active';
-//     await subscription.save();
-
-//     // Create payment record
-//     const payment = new Payment({
-//       user: subscription.user,
-//       subscription: subscription._id,
-//       stripeInvoiceId: invoice.id,
-//       stripePaymentIntentId: invoice.payment_intent,
-//       amount: invoice.amount_paid / 100, // Convert from cents
-//       currency: invoice.currency,
-//       status: 'succeeded',
-//       description: `Payment for ${subscription.plan} plan`,
-//       billingPeriodStart: new Date(invoice.period_start * 1000),
-//       billingPeriodEnd: new Date(invoice.period_end * 1000),
-//       receiptUrl: invoice.hosted_invoice_url,
-//     });
-
-//     // If the invoice has payment method details
-//     if (invoice.payment_intent && invoice.charge) {
-//       // We need to fetch the charge to get payment method details
-//       const charge = await stripe.charges.retrieve(invoice.charge);
-//       if (charge.payment_method_details && charge.payment_method_details.card) {
-//         payment.paymentMethod = 'card';
-//         payment.cardBrand = charge.payment_method_details.card.brand;
-//         payment.cardLast4 = charge.payment_method_details.card.last4;
-//       }
-//     }
-
-//     await payment.save();
-
-//     // Check if this is a renewal
-//     if (invoice.billing_reason === 'subscription_cycle') {
-//       // Create subscription history record for renewal
-//       await SubscriptionHistory.create({
-//         user: subscription.user,
-//         subscription: subscription._id,
-//         changeType: 'renewed',
-//         previousPlan: subscription.plan,
-//         newPlan: subscription.plan,
-//         effectiveDate: new Date(),
-//         notes: `Subscription renewed for period ${new Date(
-//           invoice.period_start * 1000
-//         ).toLocaleDateString()} to ${new Date(
-//           invoice.period_end * 1000
-//         ).toLocaleDateString()}`,
-//       });
-//     }
-
-//     console.log({ subscription, payment });
-//   } catch (error) {
-//     console.error('Error handling payment success:', error);
-//   }
-// };
 const handlePaymentFailed = async (invoice) => {
   try {
     const stripeSubscriptionId = invoice.subscription;
@@ -1064,34 +940,6 @@ const handlePaymentFailed = async (invoice) => {
     // createLogger.error('Error handling payment failure:', error);
   }
 };
-
-// const handlePaymentSucceeded = async (invoice) => {
-//   try {
-//     const subscriptionId = invoice.subscription;
-
-//     // Find and update subscription
-//     await Subscription.findOneAndUpdate(
-//       { stripeSubscriptionId: subscriptionId },
-//       { status: 'active' }
-//     );
-//   } catch (error) {
-//     console.error('Error handling payment success:', error);
-//   }
-// };
-
-// const handlePaymentFailed = async (invoice) => {
-//   try {
-//     const subscriptionId = invoice.subscription;
-
-//     // Find and update subscription
-//     await Subscription.findOneAndUpdate(
-//       { stripeSubscriptionId: subscriptionId },
-//       { status: 'past_due' }
-//     );
-//   } catch (error) {
-//     console.error('Error handling payment failure:', error);
-//   }
-// };
 
 export const cancelSubscriptionService = catchAsync(async (req, res, next) => {
   const { id: userId } = req.user;
