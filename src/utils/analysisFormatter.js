@@ -214,6 +214,7 @@ const validateApiResponse = (response) => {
 
 // Complete workflow function
 const processAnalysisResponse = async (apiResponse, userId) => {
+  console.log('Processing analysis response...', apiResponse, apiResponse.player_analytics);
   try {
     // Step 1: Validate the API response
     const validationErrors = validateApiResponse(apiResponse);
@@ -277,6 +278,8 @@ const transformNewAnalysisResults = (newFormatResponse) => {
     
     players.push(player);
   });
+
+  console.log({})
 
   // Return in expected format
   return {
