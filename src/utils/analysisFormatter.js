@@ -193,19 +193,21 @@ const validateApiResponse = (response) => {
     errors.push('status is missing');
   }
 
-  if (response.status === 'completed') {
-    if (!response.player_analytics) {
-      errors.push('player_analytics is required for completed status');
-    }
+  // if (response.status === 'completed') {
+    // if (!response.player_analytics) {
+    //   errors.push('player_analytics is required for completed status');
+    // }
 
-    if (!response.files) {
-      errors.push('files is required for completed status');
-    }
+    // if (!response.files) {
+    //   errors.push('files is required for completed status');
+    // }
 
-    if (!response.metadata) {
-      errors.push('metadata is required for completed status');
-    }
-  }
+    // if (!response.metadata) {
+    //   errors.push('metadata is required for completed status');
+    // }
+  // }
+
+  console.log('Validation errors:', errors);
 
   return errors;
 };

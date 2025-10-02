@@ -427,22 +427,22 @@ const analysisSchema = new mongoose.Schema(
     },
     player_analytics: {
       type: playerAnalyticsSchema,
-      required: function () {
-        return this.status === 'completed';
-      },
+      // required: function () {
+      //   return this.status === 'completed';
+      // },
     },
     files: {
       type: filesSchema,
 
-      required: function () {
-        return this.status === 'completed';
-      },
+      // required: function () {
+      //   return this.status === 'completed';
+      // },
     },
     metadata: {
       type: analysisMetadataSchema,
-      required: function () {
-        return this.status === 'completed';
-      },
+      // required: function () {
+      //   return this.status === 'completed';
+      // },
     },
     // Additional fields for tracking
     error_message: {

@@ -389,10 +389,10 @@ class AnalysisStatusCronJob {
 
       // Extract status from new format if needed
       const status = rawStatus.analysis_status ? {
+        ...rawStatus,
         status: rawStatus.analysis_status,
         message: rawStatus.status === 'success' ? 'Analysis completed' : 'Analysis in progress',
         job_id: rawStatus.job_id,
-        ...rawStatus
       } : rawStatus;
 
 
@@ -463,12 +463,14 @@ class AnalysisStatusCronJob {
       console.log(`Analysis ${matchId} completed, fetching results...`);
 
       // Get the analysis results
-      const rawResults = await VideoAnalysisService.getAnalysisResults(analysisId);
+      // const rawResults = await VideoAnalysisService.getAnalysisResults(analysisId);
 
-      console.log({ rawResults });
+      // console.log({ rawResults });
 
       // Transform new format to expected format if needed
-      const results = transformNewAnalysisResults(rawResults);
+      let results = transformNewAnalysisResults(status);
+
+      results = {...status, match_id: matchId};
 
       console.log({ transformedResults: results });
 

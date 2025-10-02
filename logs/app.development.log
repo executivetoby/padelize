@@ -2833,3 +2833,33 @@
 {"label":"Padelize","level":"info","message":"\u001b[32m\u001b[1mSubscription management cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T09:37:20.829Z"}
 {"label":"Padelize","level":"info","message":"\u001b[35m\u001b[1mWebhook log maintenance cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T09:37:20.829Z"}
 {"label":"Padelize","level":"info","message":"\u001b[33m\u001b[1mDatabase connected on: cluster0-shard-00-02.nvs56.mongodb.net\u001b[22m\u001b[39m","timestamp":"2025-10-02T09:37:39.246Z"}
+{"label":"Padelize","level":"info","message":"\u001b[36m\u001b[1mPadelize server with WebSocket support kickstart to life on port 9000\u001b[22m\u001b[39m","timestamp":"2025-10-02T12:12:50.069Z"}
+{"label":"Padelize","level":"info","message":"\u001b[34m\u001b[1mAnalysis status cron job is active\u001b[22m\u001b[39m","timestamp":"2025-10-02T12:12:50.074Z"}
+{"label":"Padelize","level":"info","message":"\u001b[32m\u001b[1mSubscription management cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T12:12:50.074Z"}
+{"label":"Padelize","level":"info","message":"\u001b[35m\u001b[1mWebhook log maintenance cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T12:12:50.075Z"}
+{"label":"Padelize","level":"info","message":"\u001b[33m\u001b[1mDatabase connected on: cluster0-shard-00-01.nvs56.mongodb.net\u001b[22m\u001b[39m","timestamp":"2025-10-02T12:12:53.161Z"}
+{"label":"Padelize","level":"info","message":"\u001b[36m\u001b[1mPadelize server with WebSocket support kickstart to life on port 9000\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:06:37.674Z"}
+{"label":"Padelize","level":"info","message":"\u001b[34m\u001b[1mAnalysis status cron job is active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:06:37.679Z"}
+{"label":"Padelize","level":"info","message":"\u001b[32m\u001b[1mSubscription management cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:06:37.680Z"}
+{"label":"Padelize","level":"info","message":"\u001b[35m\u001b[1mWebhook log maintenance cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:06:37.680Z"}
+{"label":"Padelize","level":"info","message":"\u001b[33m\u001b[1mDatabase connected on: cluster0-shard-00-02.nvs56.mongodb.net\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:06:40.780Z"}
+{"label":"Padelize","level":"info","message":"\u001b[36m\u001b[1mPadelize server with WebSocket support kickstart to life on port 9000\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:20:30.026Z"}
+{"label":"Padelize","level":"info","message":"\u001b[34m\u001b[1mAnalysis status cron job is active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:20:30.030Z"}
+{"label":"Padelize","level":"info","message":"\u001b[32m\u001b[1mSubscription management cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:20:30.030Z"}
+{"label":"Padelize","level":"info","message":"\u001b[35m\u001b[1mWebhook log maintenance cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:20:30.031Z"}
+{"label":"Padelize","level":"info","message":"\u001b[33m\u001b[1mDatabase connected on: cluster0-shard-00-02.nvs56.mongodb.net\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:20:33.293Z"}
+{"label":"Padelize","level":"info","message":"\u001b[36m\u001b[1mPadelize server with WebSocket support kickstart to life on port 9000\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:26:01.813Z"}
+{"label":"Padelize","level":"info","message":"\u001b[34m\u001b[1mAnalysis status cron job is active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:26:01.817Z"}
+{"label":"Padelize","level":"info","message":"\u001b[32m\u001b[1mSubscription management cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:26:01.818Z"}
+{"label":"Padelize","level":"info","message":"\u001b[35m\u001b[1mWebhook log maintenance cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:26:01.818Z"}
+{"label":"Padelize","level":"info","message":"\u001b[33m\u001b[1mDatabase connected on: cluster0-shard-00-01.nvs56.mongodb.net\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:26:04.903Z"}
+{"label":"Padelize","level":"info","message":"\u001b[36m\u001b[1mPadelize server with WebSocket support kickstart to life on port 9000\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:34:05.587Z"}
+{"label":"Padelize","level":"info","message":"\u001b[34m\u001b[1mAnalysis status cron job is active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:34:05.592Z"}
+{"label":"Padelize","level":"info","message":"\u001b[32m\u001b[1mSubscription management cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:34:05.592Z"}
+{"label":"Padelize","level":"info","message":"\u001b[35m\u001b[1mWebhook log maintenance cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:34:05.593Z"}
+{"label":"Padelize","level":"info","message":"\u001b[33m\u001b[1mDatabase connected on: cluster0-shard-00-01.nvs56.mongodb.net\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:34:08.589Z"}
+{"label":"Padelize","level":"info","message":"\u001b[36m\u001b[1mPadelize server with WebSocket support kickstart to life on port 9000\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:40:17.841Z"}
+{"label":"Padelize","level":"info","message":"\u001b[34m\u001b[1mAnalysis status cron job is active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:40:17.844Z"}
+{"label":"Padelize","level":"info","message":"\u001b[32m\u001b[1mSubscription management cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:40:17.845Z"}
+{"label":"Padelize","level":"info","message":"\u001b[35m\u001b[1mWebhook log maintenance cron jobs are active\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:40:17.845Z"}
+{"label":"Padelize","level":"info","message":"\u001b[33m\u001b[1mDatabase connected on: cluster0-shard-00-02.nvs56.mongodb.net\u001b[22m\u001b[39m","timestamp":"2025-10-02T13:40:21.252Z"}
