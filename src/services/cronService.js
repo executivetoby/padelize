@@ -258,7 +258,7 @@ class AnalysisStatusCronJob {
 
     // Run every 5 minutes: '*/5 * * * *'
     this.cronJob = cron.schedule(
-      '*/1 * * * *',
+      '*/5 * * * *',
       async () => {
         if (this.isRunning) {
           console.log('Previous cron job still running, skipping...');
