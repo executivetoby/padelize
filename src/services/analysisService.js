@@ -72,23 +72,23 @@ class VideoAnalysisService {
     };
   }
 
-  // Start video analysis using JSON body approach
+  // Start video analysis using new API
   static async analyzeVideo(body) {
     try {
       const formData = new URLSearchParams();
-
-      for (const key in body) {
-        formData.append(key, body[key]);
+      
+      // New API only needs video parameter
+      if (body.video_link) {
+        formData.append('video', body.video_link);
       }
 
       const response = await fetch(
-        `${PYTHON_API_BASE_URL}/api/analyze/v3/shirtcolor_link`,
+        `${PYTHON_API_BASE_URL}/analyses/`,
         {
           method: 'POST',
           body: formData,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            // 'Content-Length': Buffer.byteLength(JSON.stringify(body)),
           },
         }
       );
@@ -139,11 +139,11 @@ class VideoAnalysisService {
     }
   }
 
-  // Check analysis status
-  static async getAnalysisStatus(matchId) {
+  // Check analysis status  
+  static async getAnalysisStatus(jobId) {
     try {
       const response = await fetch(
-        `${PYTHON_API_BASE_URL}/api/status/${matchId}`
+        `${PYTHON_API_BASE_URL}/analyses/status/?job_id=${jobId}`
       );
 
       if (!response.ok) {
@@ -183,10 +183,10 @@ class VideoAnalysisService {
   }
 
   // Get analysis results
-  static async getAnalysisResults(matchId) {
+  static async getAnalysisResults(jobId) {
     try {
       const response = await fetch(
-        `${PYTHON_API_BASE_URL}/api/results/${matchId}`
+        `${PYTHON_API_BASE_URL}/analyses/status/?job_id=${jobId}`
       );
 
       if (!response.ok) {
@@ -232,15 +232,20 @@ class VideoAnalysisService {
     pollInterval = 2000
   ) {
     const startTime = Date.now();
-    ha;
+    
     while (Date.now() - startTime < maxWaitTime) {
-      const status = await this.getAnalysisStatus(analysisId);
+      const rawStatus = await this.getAnalysisStatus(analysisId);
+      
+      // Handle both old and new status formats
+      const analysisStatus = rawStatus.analysis_status || rawStatus.status;
 
-      if (status.status === 'completed') {
-        return await this.getAnalysisResults(analysisId);
-      } else if (status.status === 'failed') {
+      if (analysisStatus === 'completed') {
+        const rawResults = await this.getAnalysisResults(analysisId);
+        const { transformNewAnalysisResults } = await import('../utils/analysisFormatter.js');
+        return transformNewAnalysisResults(rawResults);
+      } else if (analysisStatus === 'failed') {
         throw new Error(
-          `Analysis failed: ${status.message || 'Unknown error'}`
+          `Analysis failed: ${rawStatus.message || 'Unknown error'}`
         );
       }
 
@@ -256,14 +261,15 @@ class VideoAnalysisService {
     try {
       // Start analysis
       const analysisStart = await this.analyzeVideoWithFile(videoPath, options);
-      console.log('Analysis started:', analysisStart.analysis_id);
+      console.log('Analysis started:', analysisStart.job_id || analysisStart.analysis_id);
 
       // Wait for completion
-      const results = await this.waitForCompletion(analysisStart.analysis_id);
+      const jobId = analysisStart.job_id || analysisStart.analysis_id;
+      const results = await this.waitForCompletion(jobId);
       console.log('Analysis completed successfully');
 
       return {
-        analysisId: analysisStart.analysis_id,
+        analysisId: jobId,
         ...results,
       };
     } catch (error) {
@@ -339,15 +345,16 @@ export const analyzeVideoService = catchAsync(async (req, res, next) => {
       video_url,
     });
 
-    console.log('Analysis started:', analysisResult.analysis_id);
+    const jobId = analysisResult.job_id || analysisResult.analysis_id;
+    console.log('Analysis started:', jobId);
 
-    if (!analysisResult || !analysisResult.analysis_id) {
+    if (!analysisResult || !jobId) {
       throw new Error('Analysis failed to start');
     }
 
     // Update match with analysis info
-    match.analysisId = analysisResult.analysis_id;
-    match.analysisStatus = analysisResult.status;
+    match.analysisId = jobId;
+    match.analysisStatus = 'processing'; // Set initial status
     await match.save();
 
     // Send notification that analysis has started successfully
@@ -357,7 +364,7 @@ export const analyzeVideoService = catchAsync(async (req, res, next) => {
       'Your video analysis has started successfully! You will be notified when it completes.',
       {
         matchId: matchId,
-        analysisId: analysisResult.analysis_id,
+        analysisId: jobId,
         type: 'analysis_started',
         status: 'processing',
       }
@@ -369,9 +376,9 @@ export const analyzeVideoService = catchAsync(async (req, res, next) => {
       message: 'Video analysis started successfully',
       data: {
         analysis: {
-          analysisId: analysisResult.analysis_id,
-          status: analysisResult.status,
-          message: analysisResult.message,
+          analysisId: jobId,
+          status: 'processing',
+          message: 'Analysis started successfully',
         },
         match,
       },
@@ -401,10 +408,18 @@ export const getAnalysisStatusService = catchAsync(async (req, res, next) => {
   const { _id: userId } = req.user;
 
   try {
-    const status = await VideoAnalysisService.getAnalysisStatus(analysisId);
+    const rawStatus = await VideoAnalysisService.getAnalysisStatus(analysisId);
+    
+    // Handle both old and new status formats
+    const status = rawStatus.analysis_status ? {
+      status: rawStatus.analysis_status,
+      message: rawStatus.status === 'success' ? 'Analysis completed' : 'Analysis in progress',
+      job_id: rawStatus.job_id,
+      ...rawStatus
+    } : rawStatus;
 
     // If analysis is completed, send notification
-    if (status.status === 'completed') {
+    if (status.status === 'completed' || status.analysis_status === 'completed') {
       // Find the match to get context
       const match = await Match.findOne({ analysisId: analysisId });
 
@@ -421,7 +436,7 @@ export const getAnalysisStatusService = catchAsync(async (req, res, next) => {
           }
         );
       }
-    } else if (status.status === 'failed') {
+    } else if (status.status === 'failed' || status.analysis_status === 'failed') {
       // Send failure notification
       const match = await Match.findOne({ analysisId: analysisId });
 
@@ -456,7 +471,11 @@ export const getAnalysisResultsService = catchAsync(async (req, res, next) => {
   const { _id: userId } = req.user;
 
   try {
-    const results = await VideoAnalysisService.getAnalysisResults(analysisId);
+    const rawResults = await VideoAnalysisService.getAnalysisResults(analysisId);
+    
+    // Transform new format if needed
+    const { transformNewAnalysisResults } = await import('../utils/analysisFormatter.js');
+    const results = transformNewAnalysisResults(rawResults);
 
     const match = await Match.findOne({
       analysisId: analysisId,

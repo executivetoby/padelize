@@ -235,6 +235,80 @@ const processAnalysisResponse = async (apiResponse, userId) => {
   }
 };
 
+// Transform new analysis results format to expected format
+const transformNewAnalysisResults = (newFormatResponse) => {
+  const { status, job_id, analysis_status, results } = newFormatResponse;
+
+  // If it's not the new format, return as is
+  if (!results || typeof results !== 'object' || !job_id) {
+    return newFormatResponse;
+  }
+
+  // Convert numbered player results to player analytics format
+  const players = [];
+  
+  Object.keys(results).forEach((playerKey) => {
+    const playerData = results[playerKey];
+    
+    // Convert the new format metrics to the expected format
+    const player = {
+      color: [255, 0, 0], // Default color, would need to be provided from match data
+      average_speed_kmh: parseFloat(playerData['Average Speed']?.replace(' Miles per Hour', '')) * 1.60934 || 0, // Convert MPH to KMH
+      total_distance_km: parseFloat(playerData['Distance Covered']?.replace(' Meters', '')) / 1000 || 0, // Convert meters to km
+      average_distance_from_center_km: 0, // Not provided in new format
+      calories_burned: 0, // Not provided in new format
+      shots: {
+        total_shots: 0,
+        forehand: 0,
+        backhand: 0,
+        volley: 0,
+        smash: 0,
+        success: 0,
+        success_rate: parseFloat(playerData['Net Dominance']?.replace(' %', '')) || 0,
+      },
+      shot_events: [],
+      highlight_urls: [],
+      // Additional metrics from new format
+      peak_speed_kmh: parseFloat(playerData['Peak Speed']?.replace(' Miles per Hour', '')) * 1.60934 || 0,
+      net_dominance: parseFloat(playerData['Net Dominance']?.replace(' %', '')) || 0,
+    };
+    
+    players.push(player);
+  });
+
+  // Return in expected format
+  return {
+    status: analysis_status || status,
+    analysis_status: analysis_status,
+    job_id: job_id,
+    player_analytics: {
+      metadata: {
+        duration_minutes: 0, // Not provided in new format
+        date_analysed: new Date(),
+        frame_shape: [1080, 1920], // Default values
+        fps: 30,
+        num_players: players.length,
+      },
+      players: players,
+      court_info: {
+        length: 20,
+        width: 10,
+        corners: [[0, 0], [20, 0], [20, 10], [0, 10]],
+      },
+    },
+    files: {
+      highlights: new Map(),
+    },
+    metadata: {
+      created_at: new Date(),
+      completed_at: new Date(),
+      storage: 's3',
+    },
+    // Keep original new format data for reference
+    _original_new_format: newFormatResponse,
+  };
+};
+
 // Export the functions
 export {
   formatAnalysisResponse,
@@ -242,6 +316,7 @@ export {
   createAnalysisWithHelper,
   validateApiResponse,
   processAnalysisResponse,
+  transformNewAnalysisResults,
 };
 
 // Usage examples:

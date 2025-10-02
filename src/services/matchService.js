@@ -110,7 +110,8 @@ export const getMatchService = catchAsync(async (req, res, next) => {
 
   if (match.analysisStatus === 'failed') {
     try {
-      await VideoAnalysisService.restartAnalysis(match._id);
+      // Use analysisId (job_id) instead of match._id for restart
+      await VideoAnalysisService.restartAnalysis(match.analysisId || match._id);
 
       match.analysisStatus = 'processing';
       if (analysisStatus) {
@@ -457,25 +458,22 @@ const startVideoAnalysis = async (
     console.log('Processing priority:', priority);
 
     const analysisResult = await VideoAnalysisService.analyzeVideo({
-      match_id: match._id.toString(),
-      video_link: match.video,
-      player_color: generateColorString(match),
-      generate_highlights: true,
-      priority: priority, // Pass priority to analysis service
+      video_link: match.video, // New API only needs video URL
     });
 
-    if (!analysisResult) {
+    if (!analysisResult || !analysisResult.job_id) {
       throw new Error('Analysis failed to start');
     }
 
     const analysisStatus = await createOne(AnalysisStatus, {
       match_id: match._id,
-      status: analysisResult.status,
-      message: analysisResult.message,
+      status: 'processing', // Set initial status
+      message: 'Analysis started successfully',
     });
 
-    // Update match with analysis info
-    match.analysisStatus = analysisResult.status;
+    // Update match with analysis info - store job_id as analysisId
+    match.analysisId = analysisResult.job_id;
+    match.analysisStatus = 'processing';
     match.analysisStatusId = analysisStatus._id;
     await match.save();
     await match.populate('analysisStatusId');
@@ -484,7 +482,7 @@ const startVideoAnalysis = async (
     await matchNotificationService.notifyAnalysisStarted(
       userId,
       match,
-      analysisResult.analysis_id
+      analysisResult.job_id
     );
 
     return analysisResult;

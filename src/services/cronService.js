@@ -7,7 +7,7 @@ import FirebaseService from './firebaseService.js';
 import AppError from '../utils/appError.js';
 import AnalysisStatus from '../models/AnalysisStatus.js';
 import { createOne, findOne, updateOne } from '../factory/repo.js';
-import { processAnalysisResponse } from '../utils/analysisFormatter.js';
+import { processAnalysisResponse, transformNewAnalysisResults } from '../utils/analysisFormatter.js';
 import ProcessingLock from '../models/ProcessingLock.js';
 
 // class AnalysisStatusCronJob {
@@ -258,7 +258,7 @@ class AnalysisStatusCronJob {
 
     // Run every 5 minutes: '*/5 * * * *'
     this.cronJob = cron.schedule(
-      '*/5 * * * *',
+      '*/1 * * * *',
       async () => {
         if (this.isRunning) {
           console.log('Previous cron job still running, skipping...');
@@ -381,26 +381,42 @@ class AnalysisStatusCronJob {
     }
 
     try {
-      console.log(`Checking status for analysis: ${matchId}`);
+      console.log(`Checking status for analysis: ${matchId} with job_id: ${analysisId}`);
 
-      const status = await VideoAnalysisService.getAnalysisStatus(matchId);
+      const rawStatus = await VideoAnalysisService.getAnalysisStatus(analysisId);
 
-      console.log({ status });
+      console.log({ rawStatus });
+
+      // Extract status from new format if needed
+      const status = rawStatus.analysis_status ? {
+        status: rawStatus.analysis_status,
+        message: rawStatus.status === 'success' ? 'Analysis completed' : 'Analysis in progress',
+        job_id: rawStatus.job_id,
+        ...rawStatus
+      } : rawStatus;
+
+
+      console.log({status});
 
       let analysisStatus = await findOne(AnalysisStatus, { match_id: matchId });
 
       if (!analysisStatus) {
         await createOne(AnalysisStatus, status);
       } else {
+        console.log('Updating existing AnalysisStatus record', status);
         await updateOne(AnalysisStatus, { match_id: matchId }, status);
       }
 
-      if (status.status === 'completed') {
+      console.log('We got here!');
+
+      console.log('Status:', status.analysis_status);
+
+      if (status.analysis_status === 'completed') {
         await this.handleCompletedAnalysis(match, status);
-      } else if (status.status === 'failed') {
+      } else if (status.analysis_status === 'failed') {
         await this.handleFailedAnalysis(match, status);
       } else {
-        await this.updateMatchStatus(match, status.status);
+        await this.updateMatchStatus(match, status.analysis_status);
       }
     } catch (error) {
       console.error(`Error checking analysis ${matchId}:`, error);
@@ -447,9 +463,14 @@ class AnalysisStatusCronJob {
       console.log(`Analysis ${matchId} completed, fetching results...`);
 
       // Get the analysis results
-      const results = await VideoAnalysisService.getAnalysisResults(matchId);
+      const rawResults = await VideoAnalysisService.getAnalysisResults(analysisId);
 
-      console.log({ results });
+      console.log({ rawResults });
+
+      // Transform new format to expected format if needed
+      const results = transformNewAnalysisResults(rawResults);
+
+      console.log({ transformedResults: results });
 
       // Update match with results and status
       await Match.findByIdAndUpdate(matchId, {
