@@ -53,16 +53,28 @@ const formatAnalysisResponse = (apiResponse, userId) => {
       }
 
       // Ensure new metrics are present with default values if missing
-      if (player.peak_speed_kmh === undefined || player.peak_speed_kmh === null) {
+      if (
+        player.peak_speed_kmh === undefined ||
+        player.peak_speed_kmh === null
+      ) {
         player.peak_speed_kmh = player.average_speed_kmh || 0;
       }
-      if (player.net_dominance_percentage === undefined || player.net_dominance_percentage === null) {
+      if (
+        player.net_dominance_percentage === undefined ||
+        player.net_dominance_percentage === null
+      ) {
         player.net_dominance_percentage = 0;
       }
-      if (player.dead_zone_presence_percentage === undefined || player.dead_zone_presence_percentage === null) {
+      if (
+        player.dead_zone_presence_percentage === undefined ||
+        player.dead_zone_presence_percentage === null
+      ) {
         player.dead_zone_presence_percentage = 0;
       }
-      if (player.baseline_play_percentage === undefined || player.baseline_play_percentage === null) {
+      if (
+        player.baseline_play_percentage === undefined ||
+        player.baseline_play_percentage === null
+      ) {
         player.baseline_play_percentage = 0;
       }
 
@@ -244,6 +256,8 @@ const processAnalysisResponse = async (apiResponse, userId) => {
 
     // Step 2: Format the response
     const formattedData = formatAnalysisResponse(apiResponse, userId);
+
+    console.log("Formatted data:", formattedData);
 
     // Step 3: Create the document
     const analysis = await createOne(Analysis, formattedData);
