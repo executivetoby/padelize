@@ -1,6 +1,6 @@
-import Analysis from '../models/Analysis.js';
-import AppError from './appError.js';
-import { createOne } from '../factory/repo.js';
+import Analysis from "../models/Analysis.js";
+import AppError from "./appError.js";
+import { createOne } from "../factory/repo.js";
 
 // Formatter to convert API response to MongoDB document
 const formatAnalysisResponse = (apiResponse, userId) => {
@@ -52,17 +52,31 @@ const formatAnalysisResponse = (apiResponse, userId) => {
         };
       }
 
+      // Ensure new metrics are present with default values if missing
+      if (player.peak_speed_kmh === undefined || player.peak_speed_kmh === null) {
+        player.peak_speed_kmh = player.average_speed_kmh || 0;
+      }
+      if (player.net_dominance_percentage === undefined || player.net_dominance_percentage === null) {
+        player.net_dominance_percentage = 0;
+      }
+      if (player.dead_zone_presence_percentage === undefined || player.dead_zone_presence_percentage === null) {
+        player.dead_zone_presence_percentage = 0;
+      }
+      if (player.baseline_play_percentage === undefined || player.baseline_play_percentage === null) {
+        player.baseline_play_percentage = 0;
+      }
+
       // Handle shot_events - ensure they are properly formatted arrays
       if (player.shot_events) {
         if (Array.isArray(player.shot_events)) {
           // Already an array, ensure each event has proper structure
           player.shot_events = player.shot_events
             .map((event) => {
-              if (typeof event === 'object' && event !== null) {
+              if (typeof event === "object" && event !== null) {
                 return event;
               } else {
                 // If it's not an object, skip it or create a minimal structure
-                console.warn('Invalid shot event format, skipping:', event);
+                console.warn("Invalid shot event format, skipping:", event);
                 return null;
               }
             })
@@ -70,7 +84,7 @@ const formatAnalysisResponse = (apiResponse, userId) => {
         } else {
           // If it's not an array, wrap it or clear it
           console.warn(
-            'shot_events is not an array, clearing:',
+            "shot_events is not an array, clearing:",
             player.shot_events
           );
           player.shot_events = [];
@@ -89,11 +103,11 @@ const formatAnalysisResponse = (apiResponse, userId) => {
       formatted.player_analytics.shot_events =
         formatted.player_analytics.shot_events
           .map((event) => {
-            if (typeof event === 'object' && event !== null) {
+            if (typeof event === "object" && event !== null) {
               return event;
             } else {
               console.warn(
-                'Invalid top-level shot event format, skipping:',
+                "Invalid top-level shot event format, skipping:",
                 event
               );
               return null;
@@ -102,7 +116,7 @@ const formatAnalysisResponse = (apiResponse, userId) => {
           .filter((event) => event !== null);
     } else {
       console.warn(
-        'Top-level shot_events is not an array, clearing:',
+        "Top-level shot_events is not an array, clearing:",
         formatted.player_analytics.shot_events
       );
       formatted.player_analytics.shot_events = [];
@@ -123,7 +137,7 @@ const formatAnalysisResponse = (apiResponse, userId) => {
   if (formatted.files) {
     // Convert null strings to actual null
     Object.keys(formatted.files).forEach((key) => {
-      if (formatted.files[key] === null || formatted.files[key] === 'null') {
+      if (formatted.files[key] === null || formatted.files[key] === "null") {
         formatted.files[key] = null;
       }
     });
@@ -153,11 +167,11 @@ const createAnalysisFromResponse = async (apiResponse, userId) => {
 
     // Validate required fields
     if (!formattedData.match_id) {
-      throw new AppError('match_id is required');
+      throw new AppError("match_id is required");
     }
 
     if (!formattedData.status) {
-      throw new AppError('status is required');
+      throw new AppError("status is required");
     }
 
     // Create the analysis document
@@ -165,7 +179,7 @@ const createAnalysisFromResponse = async (apiResponse, userId) => {
 
     return analysis;
   } catch (error) {
-    console.error('Error creating analysis:', error);
+    console.error("Error creating analysis:", error);
     throw new AppError(error, 500);
   }
 };
@@ -176,7 +190,7 @@ const createAnalysisWithHelper = async (createOne, apiResponse, userId) => {
     const formattedData = formatAnalysisResponse(apiResponse, userId);
     return await createOne(Analysis, formattedData);
   } catch (error) {
-    console.error('Error creating analysis with helper:', error);
+    console.error("Error creating analysis with helper:", error);
     throw error;
   }
 };
@@ -186,41 +200,45 @@ const validateApiResponse = (response) => {
   const errors = [];
 
   if (!response.match_id) {
-    errors.push('match_id is missing');
+    errors.push("match_id is missing");
   }
 
   if (!response.status) {
-    errors.push('status is missing');
+    errors.push("status is missing");
   }
 
   // if (response.status === 'completed') {
-    // if (!response.player_analytics) {
-    //   errors.push('player_analytics is required for completed status');
-    // }
-
-    // if (!response.files) {
-    //   errors.push('files is required for completed status');
-    // }
-
-    // if (!response.metadata) {
-    //   errors.push('metadata is required for completed status');
-    // }
+  // if (!response.player_analytics) {
+  //   errors.push('player_analytics is required for completed status');
   // }
 
-  console.log('Validation errors:', errors);
+  // if (!response.files) {
+  //   errors.push('files is required for completed status');
+  // }
+
+  // if (!response.metadata) {
+  //   errors.push('metadata is required for completed status');
+  // }
+  // }
+
+  console.log("Validation errors:", errors);
 
   return errors;
 };
 
 // Complete workflow function
 const processAnalysisResponse = async (apiResponse, userId) => {
-  console.log('Processing analysis response...', apiResponse, apiResponse.player_analytics);
+  console.log(
+    "Processing analysis response...",
+    apiResponse,
+    apiResponse.player_analytics
+  );
   try {
     // Step 1: Validate the API response
     const validationErrors = validateApiResponse(apiResponse);
     if (validationErrors.length > 0) {
       throw new AppError(
-        `API response validation failed: ${validationErrors.join(', ')}`
+        `API response validation failed: ${validationErrors.join(", ")}`
       );
     }
 
@@ -230,10 +248,10 @@ const processAnalysisResponse = async (apiResponse, userId) => {
     // Step 3: Create the document
     const analysis = await createOne(Analysis, formattedData);
 
-    console.log('Analysis created successfully:', analysis.match_id);
+    console.log("Analysis created successfully:", analysis.match_id);
     return analysis;
   } catch (error) {
-    console.error('Error processing analysis response:', error);
+    console.error("Error processing analysis response:", error);
     throw error;
   }
 };
@@ -243,21 +261,26 @@ const transformNewAnalysisResults = (newFormatResponse) => {
   const { status, job_id, analysis_status, results } = newFormatResponse;
 
   // If it's not the new format, return as is
-  if (!results || typeof results !== 'object' || !job_id) {
+  if (!results || typeof results !== "object" || !job_id) {
     return newFormatResponse;
   }
 
   // Convert numbered player results to player analytics format
   const players = [];
-  
+
   Object.keys(results).forEach((playerKey) => {
     const playerData = results[playerKey];
-    
+
     // Convert the new format metrics to the expected format
     const player = {
       color: [255, 0, 0], // Default color, would need to be provided from match data
-      average_speed_kmh: parseFloat(playerData['Average Speed']?.replace(' Miles per Hour', '')) * 1.60934 || 0, // Convert MPH to KMH
-      total_distance_km: parseFloat(playerData['Distance Covered']?.replace(' Meters', '')) / 1000 || 0, // Convert meters to km
+      average_speed_kmh:
+        parseFloat(
+          playerData["Average Speed"]?.replace(" Miles per Hour", "")
+        ) * 1.60934 || 0, // Convert MPH to KMH
+      total_distance_km:
+        parseFloat(playerData["Distance Covered"]?.replace(" Meters", "")) /
+          1000 || 0, // Convert meters to km
       average_distance_from_center_km: 0, // Not provided in new format
       calories_burned: 0, // Not provided in new format
       shots: {
@@ -267,19 +290,29 @@ const transformNewAnalysisResults = (newFormatResponse) => {
         volley: 0,
         smash: 0,
         success: 0,
-        success_rate: parseFloat(playerData['Net Dominance']?.replace(' %', '')) || 0,
+        // success_rate:
+        //   parseFloat(playerData["Net Dominance"]?.replace(" %", "")) || 0,
       },
       shot_events: [],
       highlight_urls: [],
       // Additional metrics from new format
-      peak_speed_kmh: parseFloat(playerData['Peak Speed']?.replace(' Miles per Hour', '')) * 1.60934 || 0,
-      net_dominance: parseFloat(playerData['Net Dominance']?.replace(' %', '')) || 0,
+      peak_speed_kmh:
+        parseFloat(playerData["Peak Speed"]?.replace(" Miles per Hour", "")) *
+          1.60934 || 0,
+      net_dominance_percentage:
+        parseFloat(playerData["Net Dominance"]?.replace(" %", "")) || 0,
+      dead_zone_presence_percentage:
+        parseFloat(playerData["Dead Zone Presence"]?.replace(" %", "")) || 0,
+      baseline_play_percentage:
+        parseFloat(playerData["Baseline Play"]?.replace(" %", "")) || 0,
     };
-    
+
+    console.log("Transformed player data:", player);
+
     players.push(player);
   });
 
-  console.log({})
+  console.log({});
 
   // Return in expected format
   return {
@@ -298,7 +331,12 @@ const transformNewAnalysisResults = (newFormatResponse) => {
       court_info: {
         length: 20,
         width: 10,
-        corners: [[0, 0], [20, 0], [20, 10], [0, 10]],
+        corners: [
+          [0, 0],
+          [20, 0],
+          [20, 10],
+          [0, 10],
+        ],
       },
     },
     files: {
@@ -307,7 +345,7 @@ const transformNewAnalysisResults = (newFormatResponse) => {
     metadata: {
       created_at: new Date(),
       completed_at: new Date(),
-      storage: 's3',
+      storage: "s3",
     },
     // Keep original new format data for reference
     _original_new_format: newFormatResponse,
