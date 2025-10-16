@@ -287,6 +287,7 @@ const transformNewAnalysisResults = (newFormatResponse) => {
 
     // Convert the new format metrics to the expected format
     const player = {
+      player_id: playerKey, // Store the AI server key (a, b, c, d, etc.)
       color: [255, 0, 0], // Default color, would need to be provided from match data
       average_speed_kmh:
         parseFloat(

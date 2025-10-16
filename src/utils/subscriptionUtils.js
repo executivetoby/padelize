@@ -99,6 +99,7 @@ export const filterAnalysisResultsBySubscription = (analysis, creator) => {
       result.player_analytics.players = analysis.player_analytics.players.map(
         (player) => {
           const filteredPlayer = {
+            player_id: player.player_id, // Include player_id for correlation with AI server results
             color: player.color,
             average_speed_kmh: player.average_speed_kmh,
             total_distance_km: player.total_distance_km,

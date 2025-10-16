@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 // Schema for shot events (old format)
 const shotEventSchema = new mongoose.Schema(
@@ -165,6 +165,10 @@ const courtInfoSchema = new mongoose.Schema(
 // Schema for individual players
 const playerSchema = new mongoose.Schema(
   {
+    player_id: {
+      type: String,
+      required: false, // Optional - maps to AI server keys (a, b, c, d, etc.)
+    },
     peak_speed_kmh: {
       type: Number,
       required: true,
@@ -496,6 +500,7 @@ const analysisSchema = new mongoose.Schema(
 analysisSchema.index({ match_id: 1, status: 1 });
 analysisSchema.index({ created_by: 1, status: 1 });
 analysisSchema.index({ "metadata.created_at": -1 });
+analysisSchema.index({ "player_analytics.players.player_id": 1 });
 
 // Virtual for getting player count
 analysisSchema.virtual("playerCount").get(function () {
@@ -518,9 +523,27 @@ analysisSchema.virtual("analysisDuration").get(function () {
   );
 });
 
-// Method to get player by index
-analysisSchema.methods.getPlayer = function (index) {
-  return this.player_analytics?.players?.[index] || null;
+// Method to get player by index or player_id
+analysisSchema.methods.getPlayer = function (indexOrId) {
+  if (!this.player_analytics?.players) return null;
+  
+  // If it's a number, treat as index
+  if (typeof indexOrId === 'number') {
+    return this.player_analytics.players[indexOrId] || null;
+  }
+  
+  // If it's a string, search by player_id
+  if (typeof indexOrId === 'string') {
+    return this.player_analytics.players.find(p => p.player_id === indexOrId) || null;
+  }
+  
+  return null;
+};
+
+// Method to get player by player_id
+analysisSchema.methods.getPlayerById = function (playerId) {
+  if (!this.player_analytics?.players) return null;
+  return this.player_analytics.players.find(p => p.player_id === playerId) || null;
 };
 
 // Method to get highlights for a specific player
