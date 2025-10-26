@@ -46,6 +46,7 @@ const upload = multer({
  *   `ETag` of the uploaded file.
  */
 export const uploadLargeFile = async (filePath, fileName) => {
+  console.log('We started');
   const parallelUpload = new Upload({
     client: s3Client,
     params: {
@@ -58,6 +59,7 @@ export const uploadLargeFile = async (filePath, fileName) => {
     queueSize: 4, // Parallel uploads
   });
 
+  console.log('We ended!');
   return parallelUpload.done();
 };
 

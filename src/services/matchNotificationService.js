@@ -5,6 +5,41 @@ import webSocketService from './webSocketService.js';
 
 class MatchNotificationService {
   /**
+   * Notify user when player detection is complete
+   * @param {string} userId - User ID to notify
+   * @param {Object} match - Match object
+   * @param {Array} players - Detected players
+   */
+  async notifyPlayerDetectionComplete(userId, match, players) {
+    return this.sendMatchNotification({
+      userId,
+      type: 'player_detection_complete',
+      title: 'Player Detection Complete',
+      message: `Players have been detected in your match: ${players.length} players found`,
+      priority: 'medium',
+      data: { matchId: match._id, playerCount: players.length },
+      match,
+    });
+  }
+
+  /**
+   * Notify user when player detection fails
+   * @param {string} userId - User ID to notify
+   * @param {Object} match - Match object
+   * @param {string} errorMessage - Error message
+   */
+  async notifyPlayerDetectionFailed(userId, match, errorMessage) {
+    return this.sendMatchNotification({
+      userId,
+      type: 'player_detection_failed',
+      title: 'Player Detection Failed',
+      message: 'There was an error detecting players in your match',
+      priority: 'high',
+      data: { matchId: match._id, error: errorMessage },
+      match,
+    });
+  }
+  /**
    * Send comprehensive notification for match events
    * @param {Object} options - Notification options
    * @param {string} options.userId - User ID to send notification to

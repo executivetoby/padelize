@@ -1,23 +1,23 @@
-import { createOne, deleteOne, findOne, getAll } from "../factory/repo.js";
-import { findOneAndUpdate } from "../factory/userRepo.js";
-import Match from "../models/Match.js";
-import AppError from "../utils/appError.js";
-import catchAsync from "../utils/catchAsync.js";
-import fs from "fs";
-import { uploadLargeFile } from "./s3UploadService.js";
-import matchNotificationService from "./matchNotificationService.js";
-import { VideoAnalysisService } from "./analysisService.js";
-import AnalysisStatus from "../models/AnalysisStatus.js";
-import Analysis from "../models/Analysis.js";
-import mongoose from "mongoose";
-import Follow from "../models/Follow.js";
-import User from "../models/User.js";
+import { createOne, deleteOne, findOne, getAll } from '../factory/repo.js';
+import { findOneAndUpdate } from '../factory/userRepo.js';
+import Match from '../models/Match.js';
+import AppError from '../utils/appError.js';
+import catchAsync from '../utils/catchAsync.js';
+import fs from 'fs';
+import { uploadLargeFile } from './s3UploadService.js';
+import matchNotificationService from './matchNotificationService.js';
+import { VideoAnalysisService } from './analysisService.js';
+import AnalysisStatus from '../models/AnalysisStatus.js';
+import Analysis from '../models/Analysis.js';
+import mongoose from 'mongoose';
+import Follow from '../models/Follow.js';
+import User from '../models/User.js';
 import {
   checkUserAnalysisQuota,
   filterAnalysisResultsBySubscription,
   getProcessingMessage,
-} from "../utils/subscriptionUtils.js";
-import analysisStatusCron from "./cronService.js";
+} from '../utils/subscriptionUtils.js';
+import analysisStatusCron from './cronService.js';
 
 export const createMatchServiceService = catchAsync(async (req, res, next) => {
   const match = await createOne(Match, req.body);
@@ -26,17 +26,171 @@ export const createMatchServiceService = catchAsync(async (req, res, next) => {
   await matchNotificationService.notifyMatchCreated(req.user._id, match);
 
   res.status(201).json({
-    status: "success",
+    status: 'success',
     data: {
       match,
     },
   });
 });
 
+// export const getMatchService = catchAsync(async (req, res, next) => {
+//   const { _id: userId } = req.user;
+
+//   console.log({ userId: userId.toString() });
+
+//   const [match, analysisStatus] = await Promise.all([
+//     findOne(
+//       Match,
+//       {
+//         _id: req.params.matchId,
+//       },
+//       [
+//         { path: 'analysisStatusId' },
+//         {
+//           path: 'creator',
+//           populate: {
+//             path: 'subscription',
+//             model: 'Subscription',
+//           },
+//         },
+//       ]
+//     ),
+//     findOne(AnalysisStatus, { match_id: req.params.matchId }),
+//   ]);
+
+//   if (!match) return next(new AppError('No match found', 404));
+//   // console.log(
+//   //   'Creator Id:',
+//   //   match.creator.id.toString() == userId.toString(),
+//   //   match
+//   // );
+
+//   if (!match.public && userId.toString() != match.creator.id.toString()) {
+//     console.log(userId.toString(), match.creator.id.toString());
+//     return next(
+//       new AppError(
+//         "You are not authorized to view this match because it's not made public",
+//         403
+//       )
+//     );
+//   }
+
+//   if (!match.fetchedPlayerData) {
+//     console.log('Player data not fetched yet');
+
+//     const fetchPlayerJSON = await VideoAnalysisService.fetchPlayers({
+//       video: match.video,
+//     });
+
+//     console.log({ fetchPlayerJSON });
+
+//     const fetchPlayerResult = await fetchPlayerJSON.json();
+
+//     match.players = fetchPlayerResult.players;
+//     match.fetchedPlayerData =
+//       fetchPlayerResult[0] != 'not found' ? true : false;
+
+//     await match.save();
+
+//     console.log('Fetch player result:', fetchPlayerResult);
+//   }
+
+//   const quotaCheck = await checkUserAnalysisQuota(req.user);
+
+//   if (!match.analysisStatus && match.formattedPlayerData) {
+//     try {
+//       // Check subscription quota before auto-starting analysis
+
+//       if (quotaCheck.canAnalyze) {
+//         await startVideoAnalysis(
+//           match,
+//           req.user._id,
+//           req.body,
+//           quotaCheck.priority
+//         );
+//         match.analysisStatus = 'processing';
+//       } else {
+//         // Don't auto-start if quota exceeded
+//         console.log('Auto-analysis skipped: quota exceeded');
+//         await matchNotificationService.notifyAnalysisError(
+//           req.user._id,
+//           match,
+//           'Auto-analysis failed to start. You have exceeded your quota for this week.'
+//         );
+//       }
+//     } catch (analysisError) {
+//       console.error('Auto-analysis failed:', analysisError);
+//       await matchNotificationService.notifyAnalysisError(
+//         req.user._id,
+//         match,
+//         'Auto-analysis failed to start. You can try again manually.'
+//       );
+//     }
+//   }
+
+//   if (match.analysisStatus === 'failed') {
+//     try {
+//       // Use analysisId (job_id) instead of match._id for restart
+//       await VideoAnalysisService.restartAnalysis(match.analysisId || match._id);
+
+//       match.analysisStatus = 'processing';
+//       if (analysisStatus) {
+//         analysisStatus.status = 'processing';
+//         await analysisStatus.save();
+//       }
+
+//       await matchNotificationService.notifyAnalysisRestart(req.user._id, match);
+//     } catch (analysisError) {
+//       await matchNotificationService.notifyAnalysisError(
+//         req.user._id,
+//         match,
+//         'Failed to restart analysis. Please try again manually.'
+//       );
+//       console.error('Error restarting analysis:', analysisError);
+//     }
+//   }
+
+//   if (
+//     match.analysisStatus === 'processing' ||
+//     match.analysisStatus === 'pending'
+//   ) {
+//     await analysisStatusCron.checkSingleAnalysis(match);
+//   }
+
+//   await match.save();
+
+//   let analysis = await findOne(Analysis, { match_id: match._id });
+
+//   // Filter analysis results based on match creator's subscription and serialize properly
+//   if (analysis) {
+//     // Convert Mongoose document to plain object to avoid internal properties
+//     const analysisObj = analysis.toObject ? analysis.toObject() : analysis;
+//     // Use match creator's subscription, not the viewer's
+//     analysis = filterAnalysisResultsBySubscription(analysisObj, match.creator);
+//   }
+
+//   res.status(200).json({
+//     status: 'success',
+//     message:
+//       !quotaCheck.canAnalyze && match.analysisStatus != 'completed'
+//         ? 'Match analysis failed to start. You have exceeded your quota for this week.'
+//         : match.analysisStatus === 'failed'
+//         ? 'Match analysis failed, restarting now...'
+//         : match.analysisStatus === 'processing' ||
+//           match.analysisStatus === 'pending'
+//         ? 'Match analysis is still processing...'
+//         : 'Match analysis completed successfully.',
+//     data: {
+//       match,
+//       analysis,
+//     },
+//   });
+// });
+
+// Shared async processing function (same as before)
+
 export const getMatchService = catchAsync(async (req, res, next) => {
   const { _id: userId } = req.user;
-
-  console.log({ userId: userId.toString() });
 
   const [match, analysisStatus] = await Promise.all([
     findOne(
@@ -45,12 +199,12 @@ export const getMatchService = catchAsync(async (req, res, next) => {
         _id: req.params.matchId,
       },
       [
-        { path: "analysisStatusId" },
+        { path: 'analysisStatusId' },
         {
-          path: "creator",
+          path: 'creator',
           populate: {
-            path: "subscription",
-            model: "Subscription",
+            path: 'subscription',
+            model: 'Subscription',
           },
         },
       ]
@@ -58,15 +212,9 @@ export const getMatchService = catchAsync(async (req, res, next) => {
     findOne(AnalysisStatus, { match_id: req.params.matchId }),
   ]);
 
-  if (!match) return next(new AppError("No match found", 404));
-  // console.log(
-  //   'Creator Id:',
-  //   match.creator.id.toString() == userId.toString(),
-  //   match
-  // );
+  if (!match) return next(new AppError('No match found', 404));
 
   if (!match.public && userId.toString() != match.creator.id.toString()) {
-    console.log(userId.toString(), match.creator.id.toString());
     return next(
       new AppError(
         "You are not authorized to view this match because it's not made public",
@@ -75,30 +223,20 @@ export const getMatchService = catchAsync(async (req, res, next) => {
     );
   }
 
-  if (!match.fetchedPlayerData) {
-    console.log("Player data not fetched yet");
-
-    const fetchPlayerJSON = await VideoAnalysisService.fetchPlayers({
-      video: match.video,
-    });
-
-    const fetchPlayerResult = await fetchPlayerJSON.json();
-
-    match.players = fetchPlayerResult.players;
-    match.fetchedPlayerData =
-      fetchPlayerResult[0] != "not found" ? true : false;
-
-    await match.save();
-
-    console.log("Fetch player result:", fetchPlayerResult);
-  }
+  // Player detection is now handled by:
+  // 1. Upload service (quick attempt with 10s timeout)
+  // 2. Cron job (background processing and retry)
+  // Just return current status - no synchronous fetching
 
   const quotaCheck = await checkUserAnalysisQuota(req.user);
 
-  if (!match.analysisStatus && match.formattedPlayerData) {
+  // Only auto-start analysis if player detection is completed
+  if (
+    !match.analysisStatus &&
+    match.formattedPlayerData &&
+    match.playerDetectionStatus === 'completed'
+  ) {
     try {
-      // Check subscription quota before auto-starting analysis
-
       if (quotaCheck.canAnalyze) {
         await startVideoAnalysis(
           match,
@@ -106,34 +244,32 @@ export const getMatchService = catchAsync(async (req, res, next) => {
           req.body,
           quotaCheck.priority
         );
-        match.analysisStatus = "processing";
+        match.analysisStatus = 'processing';
       } else {
-        // Don't auto-start if quota exceeded
-        console.log("Auto-analysis skipped: quota exceeded");
+        console.log('Auto-analysis skipped: quota exceeded');
         await matchNotificationService.notifyAnalysisError(
           req.user._id,
           match,
-          "Auto-analysis failed to start. You have exceeded your quota for this week."
+          'Auto-analysis failed to start. You have exceeded your quota for this week.'
         );
       }
     } catch (analysisError) {
-      console.error("Auto-analysis failed:", analysisError);
+      console.error('Auto-analysis failed:', analysisError);
       await matchNotificationService.notifyAnalysisError(
         req.user._id,
         match,
-        "Auto-analysis failed to start. You can try again manually."
+        'Auto-analysis failed to start. You can try again manually.'
       );
     }
   }
 
-  if (match.analysisStatus === "failed") {
+  if (match.analysisStatus === 'failed') {
     try {
-      // Use analysisId (job_id) instead of match._id for restart
       await VideoAnalysisService.restartAnalysis(match.analysisId || match._id);
+      match.analysisStatus = 'processing';
 
-      match.analysisStatus = "processing";
       if (analysisStatus) {
-        analysisStatus.status = "processing";
+        analysisStatus.status = 'processing';
         await analysisStatus.save();
       }
 
@@ -142,15 +278,15 @@ export const getMatchService = catchAsync(async (req, res, next) => {
       await matchNotificationService.notifyAnalysisError(
         req.user._id,
         match,
-        "Failed to restart analysis. Please try again manually."
+        'Failed to restart analysis. Please try again manually.'
       );
-      console.error("Error restarting analysis:", analysisError);
+      console.error('Error restarting analysis:', analysisError);
     }
   }
 
   if (
-    match.analysisStatus === "processing" ||
-    match.analysisStatus === "pending"
+    match.analysisStatus === 'processing' ||
+    match.analysisStatus === 'pending'
   ) {
     await analysisStatusCron.checkSingleAnalysis(match);
   }
@@ -159,31 +295,113 @@ export const getMatchService = catchAsync(async (req, res, next) => {
 
   let analysis = await findOne(Analysis, { match_id: match._id });
 
-  // Filter analysis results based on match creator's subscription and serialize properly
   if (analysis) {
-    // Convert Mongoose document to plain object to avoid internal properties
     const analysisObj = analysis.toObject ? analysis.toObject() : analysis;
-    // Use match creator's subscription, not the viewer's
     analysis = filterAnalysisResultsBySubscription(analysisObj, match.creator);
   }
 
+  // Build comprehensive status message
+  let message = 'Match retrieved successfully.';
+
+  if (match.playerDetectionStatus === 'processing') {
+    message = 'Match retrieved. Player detection is in progress...';
+  } else if (match.playerDetectionStatus === 'failed') {
+    message =
+      'Match retrieved. Player detection failed. Our system will retry automatically.';
+  } else if (!quotaCheck.canAnalyze && match.analysisStatus != 'completed') {
+    message =
+      'Match analysis failed to start. You have exceeded your quota for this week.';
+  } else if (match.analysisStatus === 'failed') {
+    message = 'Match analysis failed, restarting now...';
+  } else if (
+    match.analysisStatus === 'processing' ||
+    match.analysisStatus === 'pending'
+  ) {
+    message = 'Match analysis is still processing...';
+  } else if (match.analysisStatus === 'completed') {
+    message = 'Match analysis completed successfully.';
+  }
+
   res.status(200).json({
-    status: "success",
-    message:
-      !quotaCheck.canAnalyze && match.analysisStatus != "completed"
-        ? "Match analysis failed to start. You have exceeded your quota for this week."
-        : match.analysisStatus === "failed"
-        ? "Match analysis failed, restarting now..."
-        : match.analysisStatus === "processing" ||
-          match.analysisStatus === "pending"
-        ? "Match analysis is still processing..."
-        : "Match analysis completed successfully.",
+    status: 'success',
+    message,
     data: {
       match,
       analysis,
+      processingStatus: {
+        playerDetection: {
+          status: match.playerDetectionStatus || 'not_started',
+          playersFound: match.players?.length || 0,
+          startedAt: match.playerDetectionStartedAt,
+          completedAt: match.playerDetectionCompletedAt,
+          error: match.playerDetectionError,
+        },
+        analysis: {
+          status: match.analysisStatus || 'not_started',
+          analysisId: match.analysisId,
+        },
+      },
     },
   });
 });
+
+async function processPlayersAsync(matchId, videoUrl) {
+  try {
+    console.log(`Starting player detection for match ${matchId}`);
+
+    const fetchPlayerJSON = await VideoAnalysisService.fetchPlayers({
+      video: videoUrl,
+    });
+
+    const fetchPlayerResult = await fetchPlayerJSON.json();
+
+    const match = await Match.findById(matchId);
+    if (!match) {
+      console.error('Match not found during player detection update');
+      return;
+    }
+
+    match.players = fetchPlayerResult.players || [];
+    match.fetchedPlayerData =
+      fetchPlayerResult[0] != 'not found' && match.players.length > 0;
+    match.playerDetectionStatus = 'completed';
+    match.playerDetectionCompletedAt = new Date();
+
+    await match.save();
+
+    console.log(`Player detection completed for match ${matchId}:`, {
+      playersFound: match.players.length,
+      fetchedPlayerData: match.fetchedPlayerData,
+    });
+
+    // Notify user of completion
+    await matchNotificationService.notifyPlayerDetectionComplete(
+      match.creator,
+      match,
+      match.players
+    );
+  } catch (error) {
+    console.error('Player detection failed:', error);
+
+    try {
+      await Match.findByIdAndUpdate(matchId, {
+        playerDetectionStatus: 'failed',
+        playerDetectionError: error.message,
+      });
+
+      const match = await Match.findById(matchId);
+      if (match) {
+        await matchNotificationService.notifyPlayerDetectionFailed(
+          match.creator,
+          match,
+          error.message
+        );
+      }
+    } catch (updateError) {
+      console.error('Failed to update match with error status:', updateError);
+    }
+  }
+}
 
 export const getAllMatchesService = catchAsync(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -197,36 +415,36 @@ export const getAllMatchesService = catchAsync(async (req, res, next) => {
     },
     {
       $lookup: {
-        from: "analyses",
+        from: 'analyses',
         let: {
-          matchAnalysisId: "$analysisId",
-          matchObjectId: "$_id",
+          matchAnalysisId: '$analysisId',
+          matchObjectId: '$_id',
         },
         pipeline: [
           {
             $match: {
               $expr: {
                 $or: [
-                  { $eq: ["$match_id", "$$matchAnalysisId"] },
-                  { $eq: ["$match_id", { $toString: "$$matchObjectId" }] },
+                  { $eq: ['$match_id', '$$matchAnalysisId'] },
+                  { $eq: ['$match_id', { $toString: '$$matchObjectId' }] },
                 ],
               },
             },
           },
         ],
-        as: "analysis",
+        as: 'analysis',
       },
     },
     {
       $addFields: {
         firstPlayer: {
           $let: {
-            vars: { analysisDoc: { $arrayElemAt: ["$analysis", 0] } },
+            vars: { analysisDoc: { $arrayElemAt: ['$analysis', 0] } },
             in: {
               $cond: {
-                if: { $ne: ["$$analysisDoc", null] },
+                if: { $ne: ['$$analysisDoc', null] },
                 then: {
-                  $arrayElemAt: ["$$analysisDoc.player_analytics.players", 0],
+                  $arrayElemAt: ['$$analysisDoc.player_analytics.players', 0],
                 },
                 else: null,
               },
@@ -235,11 +453,11 @@ export const getAllMatchesService = catchAsync(async (req, res, next) => {
         },
       },
     },
-    { $unset: "analysis" },
+    { $unset: 'analysis' },
   ]);
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     length: matches.length,
     data: {
       matches,
@@ -252,41 +470,41 @@ export const getUserMatchesService = catchAsync(async (req, res, next) => {
     {
       $match: {
         creator: new mongoose.Types.ObjectId(req.query.userId),
-        analysisStatus: "completed",
+        analysisStatus: 'completed',
       },
     },
     {
       $lookup: {
-        from: "analyses",
+        from: 'analyses',
         let: {
-          matchAnalysisId: "$analysisId",
-          matchObjectId: "$_id",
+          matchAnalysisId: '$analysisId',
+          matchObjectId: '$_id',
         },
         pipeline: [
           {
             $match: {
               $expr: {
                 $or: [
-                  { $eq: ["$match_id", "$$matchAnalysisId"] },
-                  { $eq: ["$match_id", { $toString: "$$matchObjectId" }] },
+                  { $eq: ['$match_id', '$$matchAnalysisId'] },
+                  { $eq: ['$match_id', { $toString: '$$matchObjectId' }] },
                 ],
               },
             },
           },
         ],
-        as: "analysis",
+        as: 'analysis',
       },
     },
     {
       $addFields: {
         firstPlayer: {
           $let: {
-            vars: { analysisDoc: { $arrayElemAt: ["$analysis", 0] } },
+            vars: { analysisDoc: { $arrayElemAt: ['$analysis', 0] } },
             in: {
               $cond: {
-                if: { $ne: ["$$analysisDoc", null] },
+                if: { $ne: ['$$analysisDoc', null] },
                 then: {
-                  $arrayElemAt: ["$$analysisDoc.player_analytics.players", 0],
+                  $arrayElemAt: ['$$analysisDoc.player_analytics.players', 0],
                 },
                 else: null,
               },
@@ -295,7 +513,7 @@ export const getUserMatchesService = catchAsync(async (req, res, next) => {
         },
       },
     },
-    { $unset: "analysis" },
+    { $unset: 'analysis' },
     // {
     //   $project: {
     //     format: 1,
@@ -311,7 +529,7 @@ export const getUserMatchesService = catchAsync(async (req, res, next) => {
   ]);
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     length: matches.length,
     data: { matches },
   });
@@ -327,7 +545,7 @@ export const updateMatchService = catchAsync(async (req, res, next) => {
   if (!match)
     return next(
       new AppError(
-        "No match found or you are not authorized to update this match",
+        'No match found or you are not authorized to update this match',
         404
       )
     );
@@ -336,7 +554,7 @@ export const updateMatchService = catchAsync(async (req, res, next) => {
   await matchNotificationService.notifyMatchUpdated(req.user._id, match);
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: {
       match,
     },
@@ -352,7 +570,7 @@ export const deleteMatchService = catchAsync(async (req, res, next) => {
   if (!match)
     return next(
       new AppError(
-        "No match found or you are not authorized to delete this match",
+        'No match found or you are not authorized to delete this match',
         404
       )
     );
@@ -364,15 +582,132 @@ export const deleteMatchService = catchAsync(async (req, res, next) => {
   );
 
   res.status(204).json({
-    status: "success",
+    status: 'success',
     data: null,
   });
 });
 
+// export const uploadVideoService = catchAsync(async (req, res, next) => {
+//   try {
+//     // Validate an uploaded file exists
+//     if (!req.file) return next(new AppError('No file uploaded', 400));
+
+//     const { path: tempPath, originalname } = req.file;
+
+//     const match = await findOne(Match, {
+//       _id: req.body.matchId,
+//       creator: req.user._id,
+//     });
+
+//     console.log({ match });
+
+//     if (!match) return next(new AppError('Match not found', 404));
+
+//     if (match.video && match.players.length > 0)
+//       return next(
+//         new AppError('Match already has a video attached to it', 400)
+//       );
+
+//     // Core Upload Execution
+
+//     if (!match.video) {
+//       result = await uploadLargeFile(tempPath, originalname);
+//       // Use async unlink and ensure cleanup even on failures
+//       try {
+//         if (tempPath) await fs.promises.unlink(tempPath);
+//       } catch (e) {
+//         // Log and continue if temp file can't be removed (don't crash the request)
+//         console.warn('Failed to remove temp file:', e.message || e);
+//       }
+
+//       match.video = result.Location;
+
+//       // Send notification using the dedicated service
+//       await matchNotificationService.notifyVideoUploaded(
+//         req.user._id,
+//         match,
+//         result.Location
+//       );
+
+//       console.log('We got here after uploading!', match.video);
+//     }
+
+//     // Fetch lightweight player info but don't block the response for a slow external service.
+//     // We'll wait a short time (timeout) and if it doesn't return, respond immediately
+//     const fetchPlayers = VideoAnalysisService.fetchPlayers({
+//       video: match.video,
+//     });
+
+//     const withTimeout = (p, ms) =>
+//       Promise.race([
+//         p,
+//         new Promise((_, rej) =>
+//           setTimeout(() => rej(new Error('timeout')), ms)
+//         ),
+//       ]);
+
+//     let fetchPlayerResult = null;
+//     try {
+//       // wait up to 8 seconds for a quick response; otherwise continue without it
+//       fetchPlayerResult = await withTimeout(fetchPlayers, 8000);
+//     } catch (e) {
+//       // If timed out or errored, log and continue. The background task (fetchPlayers) may still complete.
+//       console.warn(
+//         'fetchPlayers did not complete in time or errored:',
+//         e.message || e
+//       );
+//       // prevent unhandled rejection if the original promise later rejects
+//       fetchPlayers.catch((err) =>
+//         console.warn('fetchPlayers (background) error:', err)
+//       );
+//     }
+
+//     // If the service returned a raw fetch Response, parse it to JSON here so the API returns usable data.
+//     if (fetchPlayerResult && typeof fetchPlayerResult.json === 'function') {
+//       try {
+//         fetchPlayerResult = await fetchPlayerResult.json();
+//       } catch (err) {
+//         console.warn(
+//           'Failed to parse fetchPlayers response body:',
+//           err && err.message ? err.message : err
+//         );
+//         fetchPlayerResult = null;
+//       }
+//     }
+
+//     console.log('Fetch player result:', fetchPlayerResult);
+
+//     // Safely set players if the parsed result contains them
+//     match.players = (fetchPlayerResult && fetchPlayerResult.players) || [];
+//     match.fetchedPlayerData =
+//       match.players.length ===
+//       match.teams[0].players.length + match.teams[1].players.length
+//         ? true
+//         : false;
+//     await match.save();
+
+//     res.status(200).json({
+//       status: 'success',
+//       message: 'Uploaded successfully',
+//       data: {
+//         match,
+//         fetchPlayerResult,
+//       },
+//     });
+//   } catch (error) {
+//     console.error('Upload failed:', error);
+//     await matchNotificationService.notifyUploadError(
+//       req.user._id,
+//       req.body.matchId,
+//       'There was an error uploading your video. Please try again.'
+//     );
+//     res.status(500).json({ error: 'Upload failed' });
+//   }
+// });
+
 export const uploadVideoService = catchAsync(async (req, res, next) => {
   try {
-    // Validate an uploaded file exists
-    if (!req.file) return next(new AppError("No file uploaded", 400));
+    if (!req.file) return next(new AppError('No file uploaded', 400));
 
     const { path: tempPath, originalname } = req.file;
 
@@ -381,107 +716,143 @@ export const uploadVideoService = catchAsync(async (req, res, next) => {
       creator: req.user._id,
     });
 
-    if (!match) return next(new AppError("Match not found", 404));
+    if (!match) return next(new AppError('Match not found', 404));
 
-    if (match.video)
+    if (match.video && match.players.length > 0) {
       return next(
-        new AppError("Match already has a video attached to it", 400)
-      );
-
-    // Core Upload Execution
-    const result = await uploadLargeFile(tempPath, originalname);
-
-    // Use async unlink and ensure cleanup even on failures
-    try {
-      if (tempPath) await fs.promises.unlink(tempPath);
-    } catch (e) {
-      // Log and continue if temp file can't be removed (don't crash the request)
-      console.warn("Failed to remove temp file:", e.message || e);
-    }
-
-    match.video = result.Location;
-
-    // Send notification using the dedicated service
-    await matchNotificationService.notifyVideoUploaded(
-      req.user._id,
-      match,
-      result.Location
-    );
-
-    console.log("We got here after uploading!", match.video);
-
-    // Fetch lightweight player info but don't block the response for a slow external service.
-    // We'll wait a short time (timeout) and if it doesn't return, respond immediately
-    const fetchPlayers = VideoAnalysisService.fetchPlayers({
-      video: match.video,
-    });
-
-    const withTimeout = (p, ms) =>
-      Promise.race([
-        p,
-        new Promise((_, rej) =>
-          setTimeout(() => rej(new Error("timeout")), ms)
-        ),
-      ]);
-
-    let fetchPlayerResult = null;
-    try {
-      // wait up to 8 seconds for a quick response; otherwise continue without it
-      fetchPlayerResult = await withTimeout(fetchPlayers, 8000);
-    } catch (e) {
-      // If timed out or errored, log and continue. The background task (fetchPlayers) may still complete.
-      console.warn(
-        "fetchPlayers did not complete in time or errored:",
-        e.message || e
-      );
-      // prevent unhandled rejection if the original promise later rejects
-      fetchPlayers.catch((err) =>
-        console.warn("fetchPlayers (background) error:", err)
+        new AppError('Match already has a video attached to it', 400)
       );
     }
 
-    // If the service returned a raw fetch Response, parse it to JSON here so the API returns usable data.
-    if (fetchPlayerResult && typeof fetchPlayerResult.json === "function") {
+    // Upload video
+    if (!match.video) {
+      const result = await uploadLargeFile(tempPath, originalname);
+
       try {
-        fetchPlayerResult = await fetchPlayerResult.json();
-      } catch (err) {
-        console.warn(
-          "Failed to parse fetchPlayers response body:",
-          err && err.message ? err.message : err
-        );
-        fetchPlayerResult = null;
+        if (tempPath) await fs.promises.unlink(tempPath);
+      } catch (e) {
+        console.warn('Failed to remove temp file:', e.message || e);
       }
+
+      match.video = result.Location;
+      await matchNotificationService.notifyVideoUploaded(
+        req.user._id,
+        match,
+        result.Location
+      );
     }
 
-    console.log("Fetch player result:", fetchPlayerResult);
+    console.log('Outside the loop, just to ');
 
-    // Safely set players if the parsed result contains them
-    match.players = (fetchPlayerResult && fetchPlayerResult.players) || [];
-    match.fetchedPlayerData =
-      match.players.length ===
-      match.teams[0].players.length + match.teams[1].players.length
-        ? true
-        : false;
+    // Set processing status
+    match.playerDetectionStatus = 'processing';
+    match.playerDetectionStartedAt = new Date();
     await match.save();
 
+    console.log(
+      `Video uploaded for match ${match._id}. Player detection will be handled by cron.`
+    );
+
+    // Respond immediately
     res.status(200).json({
-      status: "success",
-      message: "Uploaded successfully",
+      status: 'success',
+      message: 'Video uploaded successfully. Player detection in progress.',
       data: {
         match,
-        fetchPlayerResult,
+        playerDetectionStatus: 'processing',
       },
     });
   } catch (error) {
-    console.error("Upload failed:", error);
+    console.error('Upload failed:', error);
     await matchNotificationService.notifyUploadError(
       req.user._id,
       req.body.matchId,
-      "There was an error uploading your video. Please try again."
+      'There was an error uploading your video. Please try again.'
     );
-    res.status(500).json({ error: "Upload failed" });
+    res.status(500).json({ error: 'Upload failed' });
   }
 });
+
+// Helper function to process player results (used by cron)
+async function processPlayersResult(matchId, fetchPlayerResult) {
+  try {
+    const match = await Match.findById(matchId);
+    if (!match) {
+      console.error('Match not found during player detection update');
+      return;
+    }
+
+    if (match.playerDetectionStatus === 'completed') {
+      console.log(`Match ${matchId} already processed, skipping`);
+      return;
+    }
+
+    match.players = fetchPlayerResult.players || [];
+    match.fetchedPlayerData =
+      fetchPlayerResult[0] != 'not found' && match.players.length > 0;
+    match.playerDetectionStatus = 'completed';
+    match.playerDetectionCompletedAt = new Date();
+
+    await match.save();
+
+    await matchNotificationService.notifyPlayerDetectionComplete(
+      match.creator,
+      match,
+      match.players
+    );
+
+    console.log(
+      `Player detection completed for match ${matchId}: ${match.players.length} players found`
+    );
+  } catch (error) {
+    console.error('Error processing player results:', error);
+    await updatePlayerDetectionError(matchId, error.message);
+  }
+}
+
+// Helper function to update error status
+async function updatePlayerDetectionError(matchId, errorMessage) {
+  try {
+    const match = await Match.findByIdAndUpdate(
+      matchId,
+      {
+        playerDetectionStatus: 'failed',
+        playerDetectionError: errorMessage,
+      },
+      { new: true }
+    );
+
+    if (match) {
+      await matchNotificationService.notifyPlayerDetectionFailed(
+        match.creator,
+        match,
+        errorMessage
+      );
+    }
+  } catch (error) {
+    console.error('Failed to update error status:', error);
+  }
+}
+
+// Export helper functions for use by cron
+// export { processPlayersResult, updatePlayerDetectionError };
+
+// Full async processing (for retries or when quick attempt fails badly)
+// async function processPlayersAsync(matchId, videoUrl) {
+//   try {
+//     console.log(`Starting player detection for match ${matchId}`);
+
+//     const fetchPlayerJSON = await VideoAnalysisService.fetchPlayers({
+//       video: videoUrl,
+//     });
+
+//     const fetchPlayerResult = await fetchPlayerJSON.json();
+//     await processPlayersResult(matchId, fetchPlayerResult);
+//   } catch (error) {
+//     console.error('Player detection failed:', error);
+//     await updatePlayerDetectionError(matchId, error.message);
+//   }
+// }
 
 export const analyzeVideosService = catchAsync(async (req, res, next) => {
   const { matchId } = req.params;
@@ -489,7 +860,7 @@ export const analyzeVideosService = catchAsync(async (req, res, next) => {
   if (!req.body.playersData || req.body.playersData.length === 0)
     return next(
       new AppError(
-        "No player data provided, this has to be provided to continue",
+        'No player data provided, this has to be provided to continue',
         400
       )
     );
@@ -501,11 +872,11 @@ export const analyzeVideosService = catchAsync(async (req, res, next) => {
     creator: req.user._id,
   });
 
-  if (!match) return next(new AppError("Match not found", 404));
+  if (!match) return next(new AppError('Match not found', 404));
 
   if (!match.video)
     return next(
-      new AppError("Match does not have a video attached to it", 400)
+      new AppError('Match does not have a video attached to it', 400)
     );
 
   if (!quotaCheck.canAnalyze) {
@@ -528,17 +899,17 @@ export const analyzeVideosService = catchAsync(async (req, res, next) => {
       quotaCheck.priority
     );
   } catch (analysisError) {
-    console.error("Auto-analysis failed:", analysisError);
+    console.error('Auto-analysis failed:', analysisError);
     await matchNotificationService.notifyAnalysisError(
       req.user._id,
       match,
-      "There was an error analyzing your video. Please try again."
+      'There was an error analyzing your video. Please try again.'
     );
   }
 
   res.status(200).json({
-    status: "success",
-    message: "Analysis started successfully",
+    status: 'success',
+    message: 'Analysis started successfully',
     data: {
       match,
       remainingAnalyses:
@@ -553,14 +924,14 @@ const startVideoAnalysis = async (
   match,
   userId,
   requestBody,
-  priority = "standard"
+  priority = 'standard'
 ) => {
   try {
     // Notify that analysis is starting
     await matchNotificationService.notifyAnalysisStarting(userId, match);
 
-    console.log("Player color:", generateColorString(match));
-    console.log("Processing priority:", priority);
+    console.log('Player color:', generateColorString(match));
+    console.log('Processing priority:', priority);
 
     const analysisResult = await VideoAnalysisService.analyzeVideo({
       video_path: match.video, // New API only needs video URL,
@@ -570,21 +941,21 @@ const startVideoAnalysis = async (
     });
 
     if (!analysisResult || !analysisResult.job_id) {
-      throw new Error("Analysis failed to start");
+      throw new Error('Analysis failed to start');
     }
 
     const analysisStatus = await createOne(AnalysisStatus, {
       match_id: match._id,
-      status: "processing", // Set initial status
-      message: "Analysis started successfully",
+      status: 'processing', // Set initial status
+      message: 'Analysis started successfully',
     });
 
     // Update match with analysis info - store job_id as analysisId
     match.analysisId = analysisResult.job_id;
-    match.analysisStatus = "processing";
+    match.analysisStatus = 'processing';
     match.analysisStatusId = analysisStatus._id;
     await match.save();
-    await match.populate("analysisStatusId");
+    await match.populate('analysisStatusId');
 
     // Notify that analysis has started successfully
     await matchNotificationService.notifyAnalysisStarted(
@@ -595,7 +966,7 @@ const startVideoAnalysis = async (
 
     return analysisResult;
   } catch (error) {
-    console.error("Analysis startup error:", error);
+    console.error('Analysis startup error:', error);
     await matchNotificationService.notifyAnalysisError(
       userId,
       match,
@@ -617,17 +988,17 @@ export const handleAnalysisCompletion = catchAsync(
     const match = await findOne(Match, { _id: matchId });
     if (!match) return;
 
-    if (status === "completed") {
+    if (status === 'completed') {
       await matchNotificationService.notifyAnalysisCompleted(
         match.creator,
         match,
         analysisId
       );
-    } else if (status === "failed") {
+    } else if (status === 'failed') {
       await matchNotificationService.notifyAnalysisError(
         match.creator,
         match,
-        "Analysis failed to complete. Please try again."
+        'Analysis failed to complete. Please try again.'
       );
     }
   }
@@ -653,7 +1024,7 @@ export const getUserProfileService = catchAsync(async (req, res, next) => {
 
   const user = await findOne(User, { _id: userId });
 
-  if (!user) return next(new AppError("User not found"));
+  if (!user) return next(new AppError('User not found'));
 
   const matchCount = await Match.countDocuments({ creator: userId });
   const followers = await Follow.countDocuments({ following: userId });
@@ -667,7 +1038,7 @@ export const getUserProfileService = catchAsync(async (req, res, next) => {
   const isFollowing = follow ? true : false;
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: {
       matchCount,
       followers,
@@ -697,7 +1068,7 @@ const generateColorString = (match) => {
   if (match.creatorTeam) {
     const creatorColors = getTeamColors(match.creatorTeam);
     if (creatorColors.length > 0) {
-      return creatorColors.join(",");
+      return creatorColors.join(',');
     }
   }
 
@@ -705,12 +1076,12 @@ const generateColorString = (match) => {
   if (match.opponentTeam) {
     const opponentColors = getTeamColors(match.opponentTeam);
     if (opponentColors.length > 0) {
-      return opponentColors.join(",");
+      return opponentColors.join(',');
     }
   }
 
   // If no colors found, return empty string or default
-  return "";
+  return '';
 };
 
 export const checkAnalysisQuotaService = catchAsync(async (req, res, next) => {
@@ -724,13 +1095,13 @@ export const checkAnalysisQuotaService = catchAsync(async (req, res, next) => {
   });
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: {
       canAnalyze: quotaCheck.canAnalyze,
       remainingAnalyses: quotaCheck.remainingAnalyses,
       totalAllowed: quotaCheck.totalAllowed,
       unlimited: quotaCheck.remainingAnalyses === -1,
-      plan: req.user.subscription?.plan || "free",
+      plan: req.user.subscription?.plan || 'free',
       priority: quotaCheck.priority,
       processingMessage: getProcessingMessage(quotaCheck.priority),
       analysesThisWeek,

@@ -62,7 +62,7 @@ const subscriptionSchema = new Schema(
 );
 
 export const freePlan = {
-  matchAnalysesPerWeek: 1,
+  matchAnalysesPerWeek: 10,
   shotSuccessPercentage: true,
   basicShotClassification: true, // forehand/backhand only
   fullShotBreakdown: false, // no smash & volley
@@ -77,7 +77,7 @@ export const freePlan = {
 };
 
 export const proPlan = {
-  matchAnalysesPerWeek: 3,
+  matchAnalysesPerWeek: 30,
   shotSuccessPercentage: true,
   basicShotClassification: true,
   fullShotBreakdown: true, // includes smash & volley

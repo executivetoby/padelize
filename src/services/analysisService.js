@@ -1,27 +1,28 @@
-import fs from "fs";
-import path from "path";
-import fetch from "node-fetch";
-import catchAsync from "../utils/catchAsync.js";
-import AppError from "../utils/appError.js";
-import { uploadLargeFile } from "./s3UploadService.js";
-import Match from "../models/Match.js";
-import { findOne } from "../factory/repo.js";
-import FirebaseService from "./firebaseService.js";
-import { processAnalysisResponse } from "../utils/analysisFormatter.js";
-import AnalysisStatus from "../models/AnalysisStatus.js";
-import mongoose from "mongoose";
-import Analysis from "../models/Analysis.js";
+import fs from 'fs';
+import path from 'path';
+import fetch from 'node-fetch';
+import catchAsync from '../utils/catchAsync.js';
+import AppError from '../utils/appError.js';
+import { uploadLargeFile } from './s3UploadService.js';
+import Match from '../models/Match.js';
+import { findOne } from '../factory/repo.js';
+import FirebaseService from './firebaseService.js';
+import { processAnalysisResponse } from '../utils/analysisFormatter.js';
+import AnalysisStatus from '../models/AnalysisStatus.js';
+import mongoose from 'mongoose';
+import Analysis from '../models/Analysis.js';
 
 // Configuration - update with your Python API URL
 // const PYTHON_API_BASE_URL = 'http://127.0.0.1:8000';
-const PYTHON_API_BASE_URL = "https://server.padelize.ai";
+const PYTHON_API_BASE_URL = 'https://server.padelize.ai';
+// const PYTHON_API_BASE_URL = 'http://54.195.115.106:8000';
 
 class VideoAnalysisService {
   static createMultipartFormData(videoPath, options = {}, userId, matchId) {
     const boundary = `----FormBoundary${Math.random()
       .toString(36)
       .substring(2)}`;
-    let body = "";
+    let body = '';
 
     // Add video file
     const videoBuffer = fs.readFileSync(videoPath);
@@ -31,7 +32,7 @@ class VideoAnalysisService {
     body += `Content-Disposition: form-data; name="video"; filename="${filename}"\r\n`;
     body += `Content-Type: video/mp4\r\n\r\n`;
 
-    const bodyParts = [Buffer.from(body, "utf8"), videoBuffer];
+    const bodyParts = [Buffer.from(body, 'utf8'), videoBuffer];
 
     // Add form parameters
     let formFields = `\r\n`;
@@ -43,28 +44,28 @@ class VideoAnalysisService {
     };
 
     if (options.confidence !== undefined) {
-      appendField("confidence", options.confidence);
+      appendField('confidence', options.confidence);
     }
 
     if (options.skip_frames !== undefined) {
-      appendField("skip_frames", options.skip_frames);
+      appendField('skip_frames', options.skip_frames);
     }
 
     if (options.court_detection !== undefined) {
-      appendField("court_detection", options.court_detection);
+      appendField('court_detection', options.court_detection);
     }
 
     if (userId) {
-      appendField("user_id", userId);
+      appendField('user_id', userId);
     }
 
     if (matchId) {
-      appendField("match_id", matchId);
+      appendField('match_id', matchId);
     }
 
     formFields += `--${boundary}--\r\n`;
 
-    bodyParts.push(Buffer.from(formFields, "utf8"));
+    bodyParts.push(Buffer.from(formFields, 'utf8'));
 
     return {
       body: Buffer.concat(bodyParts),
@@ -73,24 +74,24 @@ class VideoAnalysisService {
   }
 
   static fetchPlayers(body) {
-    console.log("Body:", body);
+    console.log('Body:', body);
     try {
       const formData = new URLSearchParams();
 
       // New API only needs video parameter
       if (body.video) {
-        formData.append("video", body.video);
+        formData.append('video', body.video);
       }
 
       return fetch(`${PYTHON_API_BASE_URL}/fetch_players/`, {
-        method: "POST",
+        method: 'POST',
         body: formData,
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
     } catch (error) {
-      console.error("Error fetching players:", error);
+      console.error('Error fetching players:', error);
       throw error;
     }
   }
@@ -106,10 +107,10 @@ class VideoAnalysisService {
       // }
 
       const response = await fetch(`${PYTHON_API_BASE_URL}/analyses/`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify(body),
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
@@ -120,7 +121,7 @@ class VideoAnalysisService {
 
       return await response.json();
     } catch (error) {
-      console.error("Error starting video analysis:", error);
+      console.error('Error starting video analysis:', error);
       throw error;
     }
   }
@@ -138,11 +139,11 @@ class VideoAnalysisService {
       const response = await fetch(
         `${PYTHON_API_BASE_URL}/analyze-video-file`,
         {
-          method: "POST",
+          method: 'POST',
           body: body,
           headers: {
-            "Content-Type": contentType,
-            "Content-Length": body.length,
+            'Content-Type': contentType,
+            'Content-Length': body.length,
           },
         }
       );
@@ -154,7 +155,7 @@ class VideoAnalysisService {
 
       return await response.json();
     } catch (error) {
-      console.error("Error starting video analysis with file:", error);
+      console.error('Error starting video analysis with file:', error);
       throw error;
     }
   }
@@ -175,7 +176,7 @@ class VideoAnalysisService {
 
       return await response.json();
     } catch (error) {
-      console.error("Error checking analysis status:", error);
+      console.error('Error checking analysis status:', error);
       throw error;
     }
   }
@@ -186,7 +187,7 @@ class VideoAnalysisService {
       const response = await fetch(
         `${PYTHON_API_BASE_URL}/api/restart/${matchId}`,
         {
-          method: "POST",
+          method: 'POST',
         }
       );
 
@@ -197,7 +198,7 @@ class VideoAnalysisService {
 
       return await response.json();
     } catch (error) {
-      console.error("Error restarting analysis:", error);
+      console.error('Error restarting analysis:', error);
       throw error;
     }
   }
@@ -218,7 +219,7 @@ class VideoAnalysisService {
 
       return await response.json();
     } catch (error) {
-      console.error("Error getting analysis results:", error);
+      console.error('Error getting analysis results:', error);
       throw error;
     }
   }
@@ -229,7 +230,7 @@ class VideoAnalysisService {
       const response = await fetch(
         `${PYTHON_API_BASE_URL}/analysis/${analysisId}`,
         {
-          method: "DELETE",
+          method: 'DELETE',
         }
       );
 
@@ -240,7 +241,7 @@ class VideoAnalysisService {
 
       return await response.json();
     } catch (error) {
-      console.error("Error deleting analysis:", error);
+      console.error('Error deleting analysis:', error);
       throw error;
     }
   }
@@ -259,15 +260,15 @@ class VideoAnalysisService {
       // Handle both old and new status formats
       const analysisStatus = rawStatus.analysis_status || rawStatus.status;
 
-      if (analysisStatus === "completed") {
+      if (analysisStatus === 'completed') {
         const rawResults = await this.getAnalysisResults(analysisId);
         const { transformNewAnalysisResults } = await import(
-          "../utils/analysisFormatter.js"
+          '../utils/analysisFormatter.js'
         );
         return transformNewAnalysisResults(rawResults);
-      } else if (analysisStatus === "failed") {
+      } else if (analysisStatus === 'failed') {
         throw new Error(
-          `Analysis failed: ${rawStatus.message || "Unknown error"}`
+          `Analysis failed: ${rawStatus.message || 'Unknown error'}`
         );
       }
 
@@ -275,7 +276,7 @@ class VideoAnalysisService {
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }
 
-    throw new Error("Analysis timeout - exceeded maximum wait time");
+    throw new Error('Analysis timeout - exceeded maximum wait time');
   }
 
   // Complete analysis workflow (start + wait for completion)
@@ -284,21 +285,21 @@ class VideoAnalysisService {
       // Start analysis
       const analysisStart = await this.analyzeVideoWithFile(videoPath, options);
       console.log(
-        "Analysis started:",
+        'Analysis started:',
         analysisStart.job_id || analysisStart.analysis_id
       );
 
       // Wait for completion
       const jobId = analysisStart.job_id || analysisStart.analysis_id;
       const results = await this.waitForCompletion(jobId);
-      console.log("Analysis completed successfully");
+      console.log('Analysis completed successfully');
 
       return {
         analysisId: jobId,
         ...results,
       };
     } catch (error) {
-      console.error("Complete analysis workflow failed:", error);
+      console.error('Complete analysis workflow failed:', error);
       throw error;
     }
   }
@@ -314,7 +315,7 @@ class VideoAnalysisService {
 
       return await response.json();
     } catch (error) {
-      console.error("Python API health check failed:", error);
+      console.error('Python API health check failed:', error);
       throw error;
     }
   }
@@ -330,14 +331,14 @@ export const analyzeVideoService = catchAsync(async (req, res, next) => {
   const match = await findOne(Match, { _id: matchId, creator: userId });
   if (!match || !match.video) {
     return next(
-      new AppError("No match found or no video attached to analyze", 404)
+      new AppError('No match found or no video attached to analyze', 404)
     );
   }
 
   const options = {
     confidence: parseFloat(req.body.confidence) || 0.5,
     skip_frames: parseInt(req.body.skip_frames) || 5,
-    court_detection: req.body.court_detection === "true",
+    court_detection: req.body.court_detection === 'true',
   };
 
   let analysisResult = null;
@@ -345,17 +346,17 @@ export const analyzeVideoService = catchAsync(async (req, res, next) => {
 
   try {
     // Step 1: Start video analysis
-    console.log("Starting video analysis...");
+    console.log('Starting video analysis...');
 
     // Send notification that analysis is starting
     await FirebaseService.sendNotification(
       userId,
-      "Analysis Starting",
-      "Your video analysis is now starting...",
+      'Analysis Starting',
+      'Your video analysis is now starting...',
       {
         matchId: matchId,
-        type: "analysis_starting",
-        status: "processing",
+        type: 'analysis_starting',
+        status: 'processing',
       }
     );
 
@@ -363,62 +364,62 @@ export const analyzeVideoService = catchAsync(async (req, res, next) => {
       options,
       match_id: matchId,
       user_id: userId,
-      game_type: "doubles",
-      target_player_position: "near_right",
+      game_type: 'doubles',
+      target_player_position: 'near_right',
       enable_ball_tracking: true,
       enable_action_recognition: true,
       video_url,
     });
 
     const jobId = analysisResult.job_id || analysisResult.analysis_id;
-    console.log("Analysis started:", jobId);
+    console.log('Analysis started:', jobId);
 
     if (!analysisResult || !jobId) {
-      throw new Error("Analysis failed to start");
+      throw new Error('Analysis failed to start');
     }
 
     // Update match with analysis info
     match.analysisId = jobId;
-    match.analysisStatus = "processing"; // Set initial status
+    match.analysisStatus = 'processing'; // Set initial status
     await match.save();
 
     // Send notification that analysis has started successfully
     await FirebaseService.sendNotification(
       userId,
-      "Analysis Started",
-      "Your video analysis has started successfully! You will be notified when it completes.",
+      'Analysis Started',
+      'Your video analysis has started successfully! You will be notified when it completes.',
       {
         matchId: matchId,
         analysisId: jobId,
-        type: "analysis_started",
-        status: "processing",
+        type: 'analysis_started',
+        status: 'processing',
       }
     );
 
     // Step 2: Return analysis info
     res.status(200).json({
-      status: "success",
-      message: "Video analysis started successfully",
+      status: 'success',
+      message: 'Video analysis started successfully',
       data: {
         analysis: {
           analysisId: jobId,
-          status: "processing",
-          message: "Analysis started successfully",
+          status: 'processing',
+          message: 'Analysis started successfully',
         },
         match,
       },
     });
   } catch (error) {
-    console.error("Video analysis error:", error);
+    console.error('Video analysis error:', error);
 
     // Send notification about analysis failure
     await FirebaseService.sendNotification(
       userId,
-      "Analysis Failed",
-      "There was an error starting your video analysis. Please try again.",
+      'Analysis Failed',
+      'There was an error starting your video analysis. Please try again.',
       {
         matchId: matchId,
-        type: "analysis_failed",
+        type: 'analysis_failed',
         error: error.message,
       }
     );
@@ -440,9 +441,9 @@ export const getAnalysisStatusService = catchAsync(async (req, res, next) => {
       ? {
           status: rawStatus.analysis_status,
           message:
-            rawStatus.status === "success"
-              ? "Analysis completed"
-              : "Analysis in progress",
+            rawStatus.status === 'success'
+              ? 'Analysis completed'
+              : 'Analysis in progress',
           job_id: rawStatus.job_id,
           ...rawStatus,
         }
@@ -450,8 +451,8 @@ export const getAnalysisStatusService = catchAsync(async (req, res, next) => {
 
     // If analysis is completed, send notification
     if (
-      status.status === "completed" ||
-      status.analysis_status === "completed"
+      status.status === 'completed' ||
+      status.analysis_status === 'completed'
     ) {
       // Find the match to get context
       const match = await Match.findOne({ analysisId: analysisId });
@@ -459,19 +460,19 @@ export const getAnalysisStatusService = catchAsync(async (req, res, next) => {
       if (match && match.creator.toString() === userId.toString()) {
         await FirebaseService.sendNotification(
           userId,
-          "Analysis Complete",
-          "Your video analysis has completed successfully!",
+          'Analysis Complete',
+          'Your video analysis has completed successfully!',
           {
             matchId: match._id,
             analysisId: analysisId,
-            type: "analysis_completed",
-            status: "completed",
+            type: 'analysis_completed',
+            status: 'completed',
           }
         );
       }
     } else if (
-      status.status === "failed" ||
-      status.analysis_status === "failed"
+      status.status === 'failed' ||
+      status.analysis_status === 'failed'
     ) {
       // Send failure notification
       const match = await Match.findOne({ analysisId: analysisId });
@@ -479,13 +480,13 @@ export const getAnalysisStatusService = catchAsync(async (req, res, next) => {
       if (match && match.creator.toString() === userId.toString()) {
         await FirebaseService.sendNotification(
           userId,
-          "Analysis Failed",
-          "Your video analysis has failed. Please try again.",
+          'Analysis Failed',
+          'Your video analysis has failed. Please try again.',
           {
             matchId: match._id,
             analysisId: analysisId,
-            type: "analysis_failed",
-            status: "failed",
+            type: 'analysis_failed',
+            status: 'failed',
             error: status.message,
           }
         );
@@ -493,7 +494,7 @@ export const getAnalysisStatusService = catchAsync(async (req, res, next) => {
     }
 
     res.status(200).json({
-      status: "success",
+      status: 'success',
       data: status,
     });
   } catch (error) {
@@ -513,7 +514,7 @@ export const getAnalysisResultsService = catchAsync(async (req, res, next) => {
 
     // Transform new format if needed
     const { transformNewAnalysisResults } = await import(
-      "../utils/analysisFormatter.js"
+      '../utils/analysisFormatter.js'
     );
     const results = transformNewAnalysisResults(rawResults);
 
@@ -521,20 +522,20 @@ export const getAnalysisResultsService = catchAsync(async (req, res, next) => {
       analysisId: analysisId,
       creator: userId,
     }).populate({
-      path: "creator",
+      path: 'creator',
       populate: {
-        path: "subscription",
-        model: "Subscription",
+        path: 'subscription',
+        model: 'Subscription',
       },
     });
 
     if (!match) {
-      return next(new AppError("Match not found or unauthorized", 404));
+      return next(new AppError('Match not found or unauthorized', 404));
     }
 
     // Import filtering function
     const { filterAnalysisResultsBySubscription } = await import(
-      "../utils/subscriptionUtils.js"
+      '../utils/subscriptionUtils.js'
     );
 
     // Apply subscription-based filtering based on match creator's subscription
@@ -544,12 +545,12 @@ export const getAnalysisResultsService = catchAsync(async (req, res, next) => {
     );
 
     // Update match with final results
-    match.analysisStatus = "completed";
+    match.analysisStatus = 'completed';
     match.analysisResults = filteredResults; // Store filtered results
     await match.save();
 
     res.status(200).json({
-      status: "success",
+      status: 'success',
       data: { results: filteredResults, match },
     });
   } catch (error) {
@@ -561,7 +562,7 @@ export const getAnalysisResultsService = catchAsync(async (req, res, next) => {
 export const analyzeVideoCompleteService = catchAsync(
   async (req, res, next) => {
     if (!req.file) {
-      return next(new AppError("No video file provided", 400));
+      return next(new AppError('No video file provided', 400));
     }
 
     const { path: tempPath, originalname } = req.file;
@@ -571,7 +572,7 @@ export const analyzeVideoCompleteService = catchAsync(
     const options = {
       confidence: parseFloat(req.body.confidence) || 0.5,
       skip_frames: parseInt(req.body.skip_frames) || 3,
-      court_detection: req.body.court_detection === "true",
+      court_detection: req.body.court_detection === 'true',
     };
 
     let analysisResults = null;
@@ -579,16 +580,16 @@ export const analyzeVideoCompleteService = catchAsync(
 
     try {
       // Step 1: Complete video analysis (start + wait for completion)
-      console.log("Starting complete video analysis...");
+      console.log('Starting complete video analysis...');
 
       await FirebaseService.sendNotification(
         userId,
-        "Analysis Starting",
-        "Your video analysis is now processing...",
+        'Analysis Starting',
+        'Your video analysis is now processing...',
         {
           matchId: matchId,
-          type: "analysis_starting",
-          status: "processing",
+          type: 'analysis_starting',
+          status: 'processing',
         }
       );
 
@@ -596,17 +597,17 @@ export const analyzeVideoCompleteService = catchAsync(
         tempPath,
         options
       );
-      console.log("Analysis completed successfully");
+      console.log('Analysis completed successfully');
 
       // Step 2: Upload file to your storage
-      console.log("Uploading video file...");
+      console.log('Uploading video file...');
       uploadResult = await uploadLargeFile(tempPath, originalname);
 
       if (!uploadResult) {
-        throw new Error("Failed to upload video file");
+        throw new Error('Failed to upload video file');
       }
 
-      console.log("File uploaded successfully");
+      console.log('File uploaded successfully');
 
       // Step 3: Update match if matchId provided
       if (matchId) {
@@ -618,7 +619,7 @@ export const analyzeVideoCompleteService = catchAsync(
         if (match) {
           match.video = uploadResult.Location;
           match.analysisId = analysisResults.analysisId;
-          match.analysisStatus = "completed";
+          match.analysisStatus = 'completed';
           match.analysisResults = analysisResults;
           await match.save();
         }
@@ -627,13 +628,13 @@ export const analyzeVideoCompleteService = catchAsync(
       // Step 4: Send completion notification
       await FirebaseService.sendNotification(
         userId,
-        "Analysis Complete",
-        "Your video analysis has completed successfully!",
+        'Analysis Complete',
+        'Your video analysis has completed successfully!',
         {
           matchId: matchId,
           analysisId: analysisResults.analysisId,
-          type: "analysis_completed",
-          status: "completed",
+          type: 'analysis_completed',
+          status: 'completed',
         }
       );
 
@@ -642,12 +643,12 @@ export const analyzeVideoCompleteService = catchAsync(
 
       // Step 6: Return complete results with file URL
       res.status(200).json({
-        status: "success",
-        message: "Video analysis completed and file uploaded",
+        status: 'success',
+        message: 'Video analysis completed and file uploaded',
         data: {
           analysis: {
             analysisId: analysisResults.analysisId,
-            status: "completed",
+            status: 'completed',
             results: analysisResults,
           },
           upload: {
@@ -657,16 +658,16 @@ export const analyzeVideoCompleteService = catchAsync(
         },
       });
     } catch (error) {
-      console.error("Complete video analysis/upload error:", error);
+      console.error('Complete video analysis/upload error:', error);
 
       // Send failure notification
       await FirebaseService.sendNotification(
         userId,
-        "Analysis Failed",
-        "There was an error processing your video analysis. Please try again.",
+        'Analysis Failed',
+        'There was an error processing your video analysis. Please try again.',
         {
           matchId: matchId,
-          type: "analysis_failed",
+          type: 'analysis_failed',
           error: error.message,
         }
       );
@@ -677,7 +678,7 @@ export const analyzeVideoCompleteService = catchAsync(
           fs.unlinkSync(tempPath);
         }
       } catch (unlinkError) {
-        console.error("Error cleaning up temp file:", unlinkError);
+        console.error('Error cleaning up temp file:', unlinkError);
       }
 
       return next(
@@ -700,7 +701,7 @@ export const deleteAnalysisService = catchAsync(async (req, res, next) => {
     });
 
     if (!match) {
-      return next(new AppError("Analysis not found or unauthorized", 404));
+      return next(new AppError('Analysis not found or unauthorized', 404));
     }
 
     const result = await VideoAnalysisService.deleteAnalysis(analysisId);
@@ -712,8 +713,8 @@ export const deleteAnalysisService = catchAsync(async (req, res, next) => {
     await match.save();
 
     res.status(200).json({
-      status: "success",
-      message: "Analysis deleted successfully",
+      status: 'success',
+      message: 'Analysis deleted successfully',
       data: result,
     });
   } catch (error) {
@@ -728,8 +729,8 @@ export const checkPythonApiHealthService = catchAsync(
       const healthData = await VideoAnalysisService.checkHealth();
 
       res.status(200).json({
-        status: "success",
-        message: "Python API is healthy",
+        status: 'success',
+        message: 'Python API is healthy',
         data: {
           pythonApi: healthData,
           timestamp: new Date().toISOString(),
@@ -739,8 +740,8 @@ export const checkPythonApiHealthService = catchAsync(
     } catch (error) {
       // Python API is down or unhealthy
       res.status(503).json({
-        status: "error",
-        message: "Python API is unavailable",
+        status: 'error',
+        message: 'Python API is unavailable',
         data: {
           error: error.message,
           timestamp: new Date().toISOString(),
@@ -754,7 +755,7 @@ export const checkPythonApiHealthService = catchAsync(
 // Enhanced health check that tests multiple endpoints
 export const fullHealthCheckService = catchAsync(async (req, res, next) => {
   const healthResults = {
-    nodeApi: "healthy",
+    nodeApi: 'healthy',
     pythonApi: null,
     timestamp: new Date().toISOString(),
     details: {},
@@ -766,7 +767,7 @@ export const fullHealthCheckService = catchAsync(async (req, res, next) => {
     const pythonHealth = await VideoAnalysisService.checkHealth();
     const responseTime = Date.now() - startTime;
 
-    healthResults.pythonApi = "healthy";
+    healthResults.pythonApi = 'healthy';
     healthResults.details.pythonApi = {
       status: pythonHealth,
       responseTime: `${responseTime}ms`,
@@ -774,20 +775,20 @@ export const fullHealthCheckService = catchAsync(async (req, res, next) => {
     };
 
     res.status(200).json({
-      status: "success",
-      message: "All services are healthy",
+      status: 'success',
+      message: 'All services are healthy',
       data: healthResults,
     });
   } catch (error) {
-    healthResults.pythonApi = "unhealthy";
+    healthResults.pythonApi = 'unhealthy';
     healthResults.details.pythonApi = {
       error: error.message,
       url: PYTHON_API_BASE_URL,
     };
 
     res.status(503).json({
-      status: "partial",
-      message: "Some services are unavailable",
+      status: 'partial',
+      message: 'Some services are unavailable',
       data: healthResults,
     });
   }
@@ -799,8 +800,8 @@ export const testAnalysisSave = catchAsync(async (req, res, next) => {
   const analysis = await processAnalysisResponse(req.body, userId);
 
   res.status(201).json({
-    status: "success",
-    message: "Analysis created successfully",
+    status: 'success',
+    message: 'Analysis created successfully',
     data: analysis,
   });
 });
@@ -814,19 +815,19 @@ export const restartAnalysisService = catchAsync(async (req, res, next) => {
   ]);
 
   if (!match) {
-    return next(new AppError("Match not found", 404));
+    return next(new AppError('Match not found', 404));
   }
 
   const analysis = await VideoAnalysisService.restartAnalysis(matchId);
 
-  match.analysisStatus = "processing";
-  analysisStatus.status = "processing";
+  match.analysisStatus = 'processing';
+  analysisStatus.status = 'processing';
 
   await Promise.all([match.save(), analysisStatus.save()]);
 
   res.status(200).json({
-    status: "success",
-    message: "Analysis restarted successfully",
+    status: 'success',
+    message: 'Analysis restarted successfully',
     data: analysis,
   });
 });
@@ -849,7 +850,7 @@ class PlayerAnalyticsAggregator {
       endDate,
       createdBy,
       matchIds,
-      status = "completed",
+      status = 'completed',
     } = options;
 
     // Build match criteria
@@ -884,14 +885,14 @@ class PlayerAnalyticsAggregator {
         // Add field to get only the first player from each analysis
         {
           $addFields: {
-            first_player: { $arrayElemAt: ["$player_analytics.players", 0] },
+            first_player: { $arrayElemAt: ['$player_analytics.players', 0] },
           },
         },
 
         // Replace the players array with just the first player for processing
         {
           $addFields: {
-            "player_analytics.players": "$first_player",
+            'player_analytics.players': '$first_player',
           },
         },
 
@@ -905,61 +906,61 @@ class PlayerAnalyticsAggregator {
 
             // Average physical metrics
             avg_speed_kmh: {
-              $avg: "$player_analytics.players.average_speed_kmh",
+              $avg: '$player_analytics.players.average_speed_kmh',
             },
             avg_total_distance_km: {
-              $avg: "$player_analytics.players.total_distance_km",
+              $avg: '$player_analytics.players.total_distance_km',
             },
             avg_distance_from_center_km: {
-              $avg: "$player_analytics.players.average_distance_from_center_km",
+              $avg: '$player_analytics.players.average_distance_from_center_km',
             },
             avg_calories_burned: {
-              $avg: "$player_analytics.players.calories_burned",
+              $avg: '$player_analytics.players.calories_burned',
             },
 
             // Sum and average shot statistics
             total_shots_sum: {
-              $sum: "$player_analytics.players.shots.total_shots",
+              $sum: '$player_analytics.players.shots.total_shots',
             },
             total_forehand_sum: {
-              $sum: "$player_analytics.players.shots.forehand",
+              $sum: '$player_analytics.players.shots.forehand',
             },
             total_backhand_sum: {
-              $sum: "$player_analytics.players.shots.backhand",
+              $sum: '$player_analytics.players.shots.backhand',
             },
             total_volley_sum: {
-              $sum: "$player_analytics.players.shots.volley",
+              $sum: '$player_analytics.players.shots.volley',
             },
-            total_smash_sum: { $sum: "$player_analytics.players.shots.smash" },
+            total_smash_sum: { $sum: '$player_analytics.players.shots.smash' },
             total_success_sum: {
-              $sum: "$player_analytics.players.shots.success",
+              $sum: '$player_analytics.players.shots.success',
             },
 
             // Average shots per match
             avg_shots_per_match: {
-              $avg: "$player_analytics.players.shots.total_shots",
+              $avg: '$player_analytics.players.shots.total_shots',
             },
             avg_forehand_per_match: {
-              $avg: "$player_analytics.players.shots.forehand",
+              $avg: '$player_analytics.players.shots.forehand',
             },
             avg_backhand_per_match: {
-              $avg: "$player_analytics.players.shots.backhand",
+              $avg: '$player_analytics.players.shots.backhand',
             },
             avg_volley_per_match: {
-              $avg: "$player_analytics.players.shots.volley",
+              $avg: '$player_analytics.players.shots.volley',
             },
             avg_smash_per_match: {
-              $avg: "$player_analytics.players.shots.smash",
+              $avg: '$player_analytics.players.shots.smash',
             },
 
             // Collect all success rates for later calculation
             success_rates: {
-              $push: "$player_analytics.players.shots.success_rate",
+              $push: '$player_analytics.players.shots.success_rate',
             },
 
             // Date range for reference
-            first_analysis: { $min: "$createdAt" },
-            last_analysis: { $max: "$createdAt" },
+            first_analysis: { $min: '$createdAt' },
+            last_analysis: { $max: '$createdAt' },
           },
         },
 
@@ -969,10 +970,10 @@ class PlayerAnalyticsAggregator {
             // Calculate overall success rate from totals
             overall_success_rate: {
               $cond: {
-                if: { $gt: ["$total_shots_sum", 0] },
+                if: { $gt: ['$total_shots_sum', 0] },
                 then: {
                   $multiply: [
-                    { $divide: ["$total_success_sum", "$total_shots_sum"] },
+                    { $divide: ['$total_success_sum', '$total_shots_sum'] },
                     100,
                   ],
                 },
@@ -981,7 +982,7 @@ class PlayerAnalyticsAggregator {
             },
 
             // Calculate average success rate across matches
-            avg_success_rate_per_match: { $avg: "$success_rates" },
+            avg_success_rate_per_match: { $avg: '$success_rates' },
           },
         },
 
@@ -991,40 +992,40 @@ class PlayerAnalyticsAggregator {
             _id: 0,
             total_analyses: 1,
             date_range: {
-              from: "$first_analysis",
-              to: "$last_analysis",
+              from: '$first_analysis',
+              to: '$last_analysis',
             },
 
             // Physical performance averages
             performance_averages: {
-              speed_kmh: { $round: ["$avg_speed_kmh", 2] },
-              total_distance_km: { $round: ["$avg_total_distance_km", 4] },
+              speed_kmh: { $round: ['$avg_speed_kmh', 2] },
+              total_distance_km: { $round: ['$avg_total_distance_km', 4] },
               distance_from_center_km: {
-                $round: ["$avg_distance_from_center_km", 6],
+                $round: ['$avg_distance_from_center_km', 6],
               },
-              calories_burned: { $round: ["$avg_calories_burned", 2] },
+              calories_burned: { $round: ['$avg_calories_burned', 2] },
             },
 
             // Shot statistics - totals across all matches
             shot_totals: {
-              total_shots: "$total_shots_sum",
-              forehand: "$total_forehand_sum",
-              backhand: "$total_backhand_sum",
-              volley: "$total_volley_sum",
-              smash: "$total_smash_sum",
-              successful_shots: "$total_success_sum",
-              overall_success_rate: { $round: ["$overall_success_rate", 2] },
+              total_shots: '$total_shots_sum',
+              forehand: '$total_forehand_sum',
+              backhand: '$total_backhand_sum',
+              volley: '$total_volley_sum',
+              smash: '$total_smash_sum',
+              successful_shots: '$total_success_sum',
+              overall_success_rate: { $round: ['$overall_success_rate', 2] },
             },
 
             // Shot statistics - averages per match
             shot_averages_per_match: {
-              shots_per_match: { $round: ["$avg_shots_per_match", 2] },
-              forehand_per_match: { $round: ["$avg_forehand_per_match", 2] },
-              backhand_per_match: { $round: ["$avg_backhand_per_match", 2] },
-              volley_per_match: { $round: ["$avg_volley_per_match", 2] },
-              smash_per_match: { $round: ["$avg_smash_per_match", 2] },
+              shots_per_match: { $round: ['$avg_shots_per_match', 2] },
+              forehand_per_match: { $round: ['$avg_forehand_per_match', 2] },
+              backhand_per_match: { $round: ['$avg_backhand_per_match', 2] },
+              volley_per_match: { $round: ['$avg_volley_per_match', 2] },
+              smash_per_match: { $round: ['$avg_smash_per_match', 2] },
               success_rate_per_match: {
-                $round: ["$avg_success_rate_per_match", 2],
+                $round: ['$avg_success_rate_per_match', 2],
               },
             },
           },
@@ -1059,34 +1060,34 @@ class PlayerAnalyticsAggregator {
           _id: null,
           total_analyses: { $sum: 1 },
           total_duration_minutes: {
-            $sum: "$player_analytics.metadata.duration_minutes",
+            $sum: '$player_analytics.metadata.duration_minutes',
           },
           avg_duration_minutes: {
-            $avg: "$player_analytics.metadata.duration_minutes",
+            $avg: '$player_analytics.metadata.duration_minutes',
           },
-          unique_matches: { $addToSet: "$match_id" },
+          unique_matches: { $addToSet: '$match_id' },
           date_range: {
-            $push: "$createdAt",
+            $push: '$createdAt',
           },
         },
       },
       {
         $addFields: {
-          unique_match_count: { $size: "$unique_matches" },
-          earliest_date: { $min: "$date_range" },
-          latest_date: { $max: "$date_range" },
+          unique_match_count: { $size: '$unique_matches' },
+          earliest_date: { $min: '$date_range' },
+          latest_date: { $max: '$date_range' },
         },
       },
       {
         $project: {
           _id: 0,
           total_analyses: 1,
-          unique_matches: "$unique_match_count",
-          total_duration_minutes: { $round: ["$total_duration_minutes", 2] },
-          avg_duration_minutes: { $round: ["$avg_duration_minutes", 2] },
+          unique_matches: '$unique_match_count',
+          total_duration_minutes: { $round: ['$total_duration_minutes', 2] },
+          avg_duration_minutes: { $round: ['$avg_duration_minutes', 2] },
           date_range: {
-            from: "$earliest_date",
-            to: "$latest_date",
+            from: '$earliest_date',
+            to: '$latest_date',
           },
         },
       },
@@ -1114,7 +1115,7 @@ class PlayerAnalyticsAggregator {
     ]);
 
     if (!performance1 || !performance2) {
-      throw new Error("First player data not found for one or both periods");
+      throw new Error('First player data not found for one or both periods');
     }
 
     // Calculate percentage changes
@@ -1152,7 +1153,7 @@ class PlayerAnalyticsAggregator {
    * @param {String} options.status - Analysis status filter (optional, default: 'completed')
    */
   static async getLastTwoMatchesComparison(options = {}) {
-    const { createdBy, status = "completed" } = options;
+    const { createdBy, status = 'completed' } = options;
 
     // Build match criteria
     const matchCriteria = {
@@ -1169,11 +1170,11 @@ class PlayerAnalyticsAggregator {
       const lastTwoAnalyses = await Analysis.find(matchCriteria)
         .sort({ createdAt: -1 })
         .limit(2)
-        .select("player_analytics createdAt match_id");
+        .select('player_analytics createdAt match_id');
 
       if (lastTwoAnalyses.length < 2) {
         throw new Error(
-          "Not enough analyses found. Need at least 2 matches for comparison."
+          'Not enough analyses found. Need at least 2 matches for comparison.'
         );
       }
 
@@ -1184,7 +1185,7 @@ class PlayerAnalyticsAggregator {
       const previousPlayer = previous.player_analytics.players[0];
 
       if (!latestPlayer || !previousPlayer) {
-        throw new Error("Player data not found in one or both analyses");
+        throw new Error('Player data not found in one or both analyses');
       }
 
       // Calculate percentage changes
@@ -1283,18 +1284,18 @@ class PlayerAnalyticsAggregator {
         ([metric, change]) => {
           if (change > 0) {
             comparison.summary.improved_metrics.push({
-              metric: metric.replace("_change", ""),
+              metric: metric.replace('_change', ''),
               change: `+${change}%`,
             });
           } else if (change < 0) {
             comparison.summary.declined_metrics.push({
-              metric: metric.replace("_change", ""),
+              metric: metric.replace('_change', ''),
               change: `${change}%`,
             });
           } else {
             comparison.summary.unchanged_metrics.push({
-              metric: metric.replace("_change", ""),
-              change: "0%",
+              metric: metric.replace('_change', ''),
+              change: '0%',
             });
           }
         }
@@ -1316,13 +1317,13 @@ export const playerAverageService = catchAsync(async (req, res, next) => {
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,
       createdBy: userId,
-      matchIds: matchIds ? matchIds.split(",") : undefined,
+      matchIds: matchIds ? matchIds.split(',') : undefined,
     };
 
     const averages = await PlayerAnalyticsAggregator.getPlayerAverages(options);
 
     res.status(200).json({
-      status: "success",
+      status: 'success',
       data: averages,
     });
   } catch (error) {
@@ -1345,7 +1346,7 @@ export const lastTwoMatchesComparisonService = catchAsync(
         await PlayerAnalyticsAggregator.getLastTwoMatchesComparison(options);
 
       res.status(200).json({
-        status: "success",
+        status: 'success',
         data: comparison,
       });
     } catch (error) {
@@ -1369,7 +1370,7 @@ async function getLastMonthFirstPlayerAverages() {
   return await PlayerAnalyticsAggregator.getPlayerAverages({
     startDate: thirtyDaysAgo,
     endDate: new Date(),
-    status: "completed",
+    status: 'completed',
   });
 }
 
@@ -1377,20 +1378,20 @@ async function getLastMonthFirstPlayerAverages() {
 async function getUserFirstPlayerAverages(userId) {
   return await PlayerAnalyticsAggregator.getPlayerAverages({
     createdBy: userId,
-    status: "completed",
+    status: 'completed',
   });
 }
 
 // Example 3: Compare first player performance between two periods
 async function compareFirstPlayerImprovement() {
   const lastMonth = {
-    startDate: new Date("2025-06-01"),
-    endDate: new Date("2025-06-30"),
+    startDate: new Date('2025-06-01'),
+    endDate: new Date('2025-06-30'),
   };
 
   const thisMonth = {
-    startDate: new Date("2025-07-01"),
-    endDate: new Date("2025-07-31"),
+    startDate: new Date('2025-07-01'),
+    endDate: new Date('2025-07-31'),
   };
 
   return await PlayerAnalyticsAggregator.compareFirstPlayerPerformance(

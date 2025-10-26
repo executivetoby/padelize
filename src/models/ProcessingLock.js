@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 const ProcessingLockSchema = new mongoose.Schema(
   {
     matchId: {
-      type: mongoose.Schema.Types.ObjectId,
+      // type: mongoose.Schema.Types.ObjectId,
+      type: String,
       required: true,
       unique: true,
       ref: 'Match',
