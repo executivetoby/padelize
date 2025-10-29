@@ -126,14 +126,41 @@ export const forgotPasswordService = catchAsync(async (req, res, next) => {
     token = await createToken(pin, req.body.email);
   } else {
     token.pin = pin;
-
     await token.save();
   }
 
   console.log({ token });
 
-  const subject = 'Forgot Password';
-  const message = `Awww! You are here to reset your password, forgetting password happens to the best of us but we got you. Here is your pin: ${pin} to reset your password. You are welcome 😊😊😊.`;
+  const subject = 'Reset Your Password';
+
+  const message = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+      <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #333; margin-top: 0;">Password Reset Request</h2>
+        <p>Hi ${user.fullName.split(' ')[0]},</p>
+        <p>We received a request to reset your password. Don't worry, it happens to the best of us!</p>
+        <p>Use the PIN below to reset your password:</p>
+
+        <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 25px 0; text-align: center;">
+          <span style="font-size: 32px; font-weight: bold; color: #856404; letter-spacing: 5px;">${pin}</span>
+        </div>
+
+        <p style="color: #666; font-size: 14px;">This PIN will expire in 15 minutes for security purposes.</p>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <p style="color: #999; font-size: 13px; margin: 5px 0;">
+            <strong>Security Alert:</strong> If you didn't request a password reset, please secure your account immediately by changing your password and contacting our support team.
+          </p>
+        </div>
+
+        <p style="margin-top: 30px;">Best regards,<br><strong>The Padelize Team</strong></p>
+      </div>
+
+      <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
+        <p>Need help? Contact us at support@padelize.com</p>
+      </div>
+    </div>
+  `;
 
   await nodeMailer(req.body.email, subject, message);
 
@@ -228,14 +255,35 @@ export const sendOTPService = catchAsync(async (req, res, next) => {
     token = await createToken(pin, email);
   } else {
     token.pin = pin;
-
     await token.save();
   }
 
-  const subject = 'OTP';
-  const message = `Hello ${
-    fullName.split(' ')[0]
-  }, Here is your OTP: ${pin}. You are welcome 😊😊😊.`;
+  const subject = 'Your One-Time Password (OTP)';
+
+  const message = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+      <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #333; margin-top: 0;">Verify Your Identity</h2>
+        <p>Hi ${fullName.split(' ')[0]},</p>
+        <p>You requested a one-time password to verify your identity. Please use the code below:</p>
+
+        <div style="background-color: #f0f7ff; border-left: 4px solid #007bff; padding: 15px; margin: 25px 0; text-align: center;">
+          <span style="font-size: 32px; font-weight: bold; color: #007bff; letter-spacing: 5px;">${pin}</span>
+        </div>
+
+        <p style="color: #666; font-size: 14px;">This code will expire in 10 minutes for security purposes.</p>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <p style="color: #999; font-size: 13px; margin: 5px 0;">
+            <strong>Security Note:</strong> If you didn't request this code, please ignore this email or contact our support team immediately.
+          </p>
+        </div>
+
+        <p style="margin-top: 30px;">Best regards,<br><strong>The Padelize Team</strong></p>
+      </div>
+    </div>
+  `;
+
   await nodeMailer(email, subject, message);
 
   res.status(200).json({
@@ -243,7 +291,6 @@ export const sendOTPService = catchAsync(async (req, res, next) => {
     message: 'OTP sent successfully',
   });
 });
-
 export const verifyEmailService = catchAsync(async (req, res, next) => {
   const { pin } = req.body;
 
