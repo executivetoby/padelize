@@ -24,7 +24,7 @@ const nodeMailer = catchAsync(async (user, subject, message) => {
   const transport = nodemailer.createTransport(mg(mailgunAuth));
 
   const mailOptions = {
-    from: 'support@padelize.com',
+    from: 'support@padelize.ai',
     to: user,
     subject: subject,
     html: message,
